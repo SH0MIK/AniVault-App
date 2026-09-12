@@ -19,6 +19,9 @@ import HistoryScreen from '../screens/HistoryScreen';
 import DownloadsScreen from '../screens/DownloadsScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import CharacterScreen from '../screens/CharacterScreen';
+import SeasonalScreen from '../screens/SeasonalScreen';
+import TopAnimeScreen from '../screens/TopAnimeScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 import { colors } from '../theme';
 
 export type RootStackParamList = {
@@ -33,6 +36,9 @@ export type RootStackParamList = {
   Downloads: undefined;
   Announcements: undefined;
   Character: { id: number };
+  Seasonal: undefined;
+  TopAnime: undefined;
+  Schedule: undefined;
 };
 
 export type TabParamList = {
@@ -47,63 +53,34 @@ export type TabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const navTheme = {
-  dark: true,
-  colors: {
-    primary: colors.accent, background: colors.bgBase, card: colors.bgSurface,
-    text: colors.textPrimary, border: colors.border, notification: colors.accent,
-  },
-} as const;
+const navTheme = { dark: true, colors: { primary: colors.accent, background: colors.bgBase, card: colors.bgSurface, text: colors.textPrimary, border: colors.border, notification: colors.accent } } as const;
 
 function Tabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.bgSurface, borderTopColor: colors.border },
-        headerStyle: { backgroundColor: colors.bgSurface },
-        headerTintColor: colors.textPrimary,
-        tabBarIcon: ({ color, size }) => {
-          const map: Record<string, string> = { Home: 'home', MyList: 'list', Browse: 'search', Chat: 'chatbubbles', Notifications: 'notifications', Profile: 'person' };
-          return <Ionicons name={(map[route.name] ?? 'ellipse') as any} size={size} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="MyList" component={MyListScreen} options={{ title: 'My List' }} />
-      <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse', headerShown: false }} />
-      <Tab.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-    </Tab.Navigator>
-  );
+  return <Tab.Navigator screenOptions={({ route }) => ({ tabBarActiveTintColor: colors.accent, tabBarInactiveTintColor: colors.textMuted, tabBarStyle: { backgroundColor: colors.bgSurface, borderTopColor: colors.border }, headerStyle: { backgroundColor: colors.bgSurface }, headerTintColor: colors.textPrimary, tabBarIcon: ({ color, size }) => { const map: Record<string, string> = { Home:'home', MyList:'list', Browse:'search', Chat:'chatbubbles', Notifications:'notifications', Profile:'person' }; return <Ionicons name={(map[route.name] ?? 'ellipse') as any} size={size} color={color}/>; } })}>
+    <Tab.Screen name="Home" component={HomeScreen} options={{ title:'Home' }}/>
+    <Tab.Screen name="MyList" component={MyListScreen} options={{ title:'My List' }}/>
+    <Tab.Screen name="Browse" component={BrowseScreen} options={{ title:'Browse', headerShown:false }}/>
+    <Tab.Screen name="Chat" component={ChatScreen} options={{ title:'Chat' }}/>
+    <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title:'Notifications' }}/>
+    <Tab.Screen name="Profile" component={ProfileScreen} options={{ title:'Profile' }}/>
+  </Tab.Navigator>;
 }
 
 export default function RootNavigator() {
-  return (
-    <NavigationContainer theme={navTheme as any}>
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.bgSurface }, headerTintColor: colors.textPrimary }}>
-        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-        <Stack.Screen
-          name="AnimeDetail"
-          component={AnimeDetailScreen}
-          options={({ route }) => ({ title: route.params?.title ?? 'Anime' })}
-        />
-        <Stack.Screen name="Watch" component={WatchScreen} options={{ title: 'Watching', headerShown: false }} />
-        <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ title: 'Account Settings' }} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({ route }) => ({ title: route.params?.username ?? 'Profile' })} />
-        <Stack.Screen
-          name="FollowList"
-          component={FollowListScreen}
-          options={({ route }) => ({ title: route.params?.type === 'followers' ? 'Followers' : 'Following' })}
-        />
-        <Stack.Screen name="WatchNow" component={WatchNowScreen} options={{ title: 'Watch Now' }} />
-        <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'Watch History' }} />
-        <Stack.Screen name="Downloads" component={DownloadsScreen} options={{ title: 'Downloads' }} />
-        <Stack.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: 'Announcements' }} />
-        <Stack.Screen name="Character" component={CharacterScreen} options={{ title: 'Character' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
+ return <NavigationContainer theme={navTheme as any}><Stack.Navigator screenOptions={{ headerStyle:{backgroundColor:colors.bgSurface}, headerTintColor:colors.textPrimary }}>
+  <Stack.Screen name="Tabs" component={Tabs} options={{headerShown:false}}/>
+  <Stack.Screen name="AnimeDetail" component={AnimeDetailScreen} options={({route})=>({title:route.params?.title??'Anime'})}/>
+  <Stack.Screen name="Watch" component={WatchScreen} options={{title:'Watching',headerShown:false}}/>
+  <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{title:'Account Settings'}}/>
+  <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({route})=>({title:route.params?.username??'Profile'})}/>
+  <Stack.Screen name="FollowList" component={FollowListScreen} options={({route})=>({title:route.params?.type==='followers'?'Followers':'Following'})}/>
+  <Stack.Screen name="WatchNow" component={WatchNowScreen} options={{title:'Watch Now'}}/>
+  <Stack.Screen name="History" component={HistoryScreen} options={{title:'Watch History'}}/>
+  <Stack.Screen name="Downloads" component={DownloadsScreen} options={{title:'Downloads'}}/>
+  <Stack.Screen name="Announcements" component={AnnouncementsScreen} options={{title:'Announcements'}}/>
+  <Stack.Screen name="Character" component={CharacterScreen} options={{title:'Character'}}/>
+  <Stack.Screen name="Seasonal" component={SeasonalScreen} options={{title:'Seasonal Anime'}}/>
+  <Stack.Screen name="TopAnime" component={TopAnimeScreen} options={{title:'Top Anime'}}/>
+  <Stack.Screen name="Schedule" component={ScheduleScreen} options={{title:'Schedule'}}/>
+ </Stack.Navigator></NavigationContainer>;
 }
