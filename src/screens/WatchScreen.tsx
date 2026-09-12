@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getAnimeDetail, getEpisodes, EpisodeItem } from '../api/content';
 import { resolveStream, NativeStream } from '../api/stream';
+import { downloadEpisode, getDownload } from '../db/downloads';
 import { colors, fonts, radius } from '../theme';
 import { GlassCard, SectionTitle } from '../components/AniVaultUI';
 
@@ -18,7 +18,10 @@ export default function WatchScreen() {
   const [anime, setAnime] = useState<any>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [stream, setStream] = useState<NativeStream | null>(null);
+  const [localUri, setLocalUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -28,17 +31,24 @@ export default function WatchScreen() {
 
   const currentEpisode = useMemo(() => episodes.find((e) => Number(e.episode) === Number(episodeNum)), [episodes, episodeNum]);
   const displayTitle = anime?.title ?? routeTitle ?? 'AniVault';
-  const source = stream?.m3u8 ?? stream?.mp4 ?? null;
+  const remoteSource = stream?.m3u8 ?? stream?.mp4 ?? null;
+  const source = localUri ?? remoteSource;
+  const canDownload = !!stream?.mp4 && !localUri;
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null); setStream(null);
+    setLoading(true); setError(null); setStream(null); setLocalUri(null);
     try {
+      const cachedDownload = getDownload(animeId, episodeNum);
+      if (cachedDownload) {
+        setLocalUri(cachedDownload.local_uri);
+      }
       const [detail, eps, resolved] = await Promise.all([
         getAnimeDetail(animeId),
         getEpisodes(animeId),
-        resolveStream(animeId, episodeNum, audio),
+        resolveStream(animeId, episodeNum, audio, server),
       ]);
-      setAnime(detail.anime); setEpisodes(eps.data ?? []); setStream(resolved); setServer(resolved.server ?? resolved.servers?.[0]?.name ?? '');
+      setAnime(detail.anime); setEpisodes(eps.data ?? []); setStream(resolved);
+      if (!server) setServer(resolved.server ?? resolved.servers?.[0]?.name ?? '');
     } catch (e: any) { setError(e?.message ?? 'Unable to resolve a playable source.'); }
     finally { setLoading(false); }
   }, [animeId, episodeNum, audio]);
@@ -50,11 +60,7 @@ export default function WatchScreen() {
     if (!rpc) return;
     try {
       rpc.start?.(DISCORD_APP_ID);
-      rpc.update?.(JSON.stringify({
-        event: playing ? 'playing' : 'paused', title: displayTitle, episode: episodeNum,
-        episodeTitle: currentEpisode?.title ?? '', image: anime?.image ?? '', currentTime: position / 1000,
-        duration: duration / 1000, playing, url: `https://www.anivault.co/watch?id=${animeId}&ep=${episodeNum}`,
-      }));
+      rpc.update?.(JSON.stringify({ event: playing ? 'playing' : 'paused', title: displayTitle, episode: episodeNum, episodeTitle: currentEpisode?.title ?? '', image: anime?.image ?? '', currentTime: position / 1000, duration: duration / 1000, playing, url: `https://www.anivault.co/watch?id=${animeId}&ep=${episodeNum}` }));
     } catch {}
   }, [animeId, episodeNum, displayTitle, currentEpisode?.title, anime?.image, position, duration, playing]);
 
@@ -68,6 +74,17 @@ export default function WatchScreen() {
   };
 
   const playEpisode = (ep: number) => navigation.replace('Watch', { animeId, episodeNum: ep, title: displayTitle });
+
+  const startDownload = async () => {
+    if (!stream?.mp4 || downloading || localUri) return;
+    setDownloading(true); setDownloadProgress(0);
+    try {
+      const record = await downloadEpisode({ animeId, episodeNum, animeTitle: displayTitle, episodeTitle: currentEpisode?.title, image: anime?.image, sourceUri: stream.mp4, onProgress: setDownloadProgress });
+      setLocalUri(record.local_uri);
+    } catch (e: any) {
+      setError(e?.message ?? 'Offline download failed.');
+    } finally { setDownloading(false); }
+  };
 
   return (
     <View style={styles.root}>
@@ -86,7 +103,14 @@ export default function WatchScreen() {
 
         <View style={styles.body}>
           <Text style={styles.watchTitle}>{displayTitle}</Text>
-          <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}</Text>
+          <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}{localUri ? ' · OFFLINE' : ''}</Text>
+
+          <View style={styles.actionRow}>
+            {canDownload && <Pressable onPress={startDownload} disabled={downloading} style={styles.downloadBtn}>
+              {downloading ? <Text style={styles.downloadText}>{Math.round(downloadProgress * 100)}%</Text> : <Text style={styles.downloadText}>↓ DOWNLOAD</Text>}
+            </Pressable>}
+            {localUri && <View style={styles.offlineBadge}><Text style={styles.offlineText}>✓ SAVED OFFLINE</Text></View>}
+          </View>
 
           <View style={styles.modeRow}>
             <Text style={styles.modeLabel}>AUDIO</Text>
@@ -96,7 +120,7 @@ export default function WatchScreen() {
           {stream?.servers && stream.servers.length > 0 && <>
             <SectionTitle>Servers</SectionTitle>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
-              {stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={async () => { try { setLoading(true); const next = await resolveStream(animeId, episodeNum, audio); setStream(next); setServer(item.name); } finally { setLoading(false); } }} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}
+              {stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={async () => { try { setLoading(true); setLocalUri(null); const next = await resolveStream(animeId, episodeNum, audio, item.name); setStream(next); setServer(item.name); } catch (e: any) { setError(e?.message ?? 'Server failed.'); } finally { setLoading(false); } }} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}
             </ScrollView>
           </>}
 
@@ -131,6 +155,11 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16 },
   watchTitle: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 18, marginTop: 18 },
   watchMeta: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  downloadBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accent },
+  downloadText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 10 },
+  offlineBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.borderAccent },
+  offlineText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 10 },
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14 },
   modeLabel: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 9, letterSpacing: 1 },
   modeChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard },
