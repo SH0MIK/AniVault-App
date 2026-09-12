@@ -13,9 +13,7 @@
       "backgroundColor": "#0a0b0e",
       "resizeMode": "contain"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "co.anivault.app"
@@ -29,19 +27,12 @@
     },
     "plugins": [
       [
-        "expo-sqlite",
-        {
-          "enableFTS": false
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/adaptive-icon.png",
           "color": "#7c3aed"
         }
-      ],
-      "./plugins/withDiscordPresence.js"
+      ]
     ]
   }
 }
