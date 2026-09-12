@@ -35,30 +35,32 @@ export interface AnimeDetail {
   totalEpisodes: number; airedSoFar: number | null; isAiring: boolean; dubbedLangs: string[];
   related: { id: number; title: string; type: string }[];
 }
+export type AnimeDetailResult = { success: boolean; anime: AnimeDetail; userEntry: any; isFavorite: boolean };
 
-export async function getAnimeDetail(id: number): Promise<{ success: boolean; anime: AnimeDetail; userEntry: any; isFavorite: boolean }> {
+export async function getAnimeDetail(id: number): Promise<AnimeDetailResult> {
   const key = `anime:${id}`;
   try {
-    const result = await apiFetch<{ success: boolean; anime: AnimeDetail; userEntry: any; isFavorite: boolean }>(`/api/mobile/anime/${id}`);
+    const result = await apiFetch<AnimeDetailResult>(`/api/mobile/anime/${id}`);
     cachePut(key, result);
     return result;
   } catch {
-    const cached = cacheGet<ReturnType<typeof getAnimeDetail> extends Promise<infer T> ? T : never>(key);
+    const cached = cacheGet<AnimeDetailResult>(key) ?? cacheGetStale<AnimeDetailResult>(key);
     if (cached) return cached;
     throw new Error('Anime details are unavailable offline. Open this anime once while online to cache it.');
   }
 }
 
 export interface EpisodeItem { mal_id?: number; episode?: number; title?: string; [key: string]: unknown; }
+export type EpisodesResult = { success: boolean; data: EpisodeItem[]; pagination: any };
 
-export async function getEpisodes(id: number, page = 1): Promise<{ success: boolean; data: EpisodeItem[]; pagination: any }> {
+export async function getEpisodes(id: number, page = 1): Promise<EpisodesResult> {
   const key = `episodes:${id}:${page}`;
   try {
-    const result = await apiFetch<{ success: boolean; data: EpisodeItem[]; pagination: any }>(`/api/mobile/anime/${id}/episodes?page=${page}`);
+    const result = await apiFetch<EpisodesResult>(`/api/mobile/anime/${id}/episodes?page=${page}`);
     cachePut(key, result);
     return result;
   } catch {
-    const cached = cacheGet<{ success: boolean; data: EpisodeItem[]; pagination: any }>(key);
+    const cached = cacheGet<EpisodesResult>(key) ?? cacheGetStale<EpisodesResult>(key);
     if (cached) return cached;
     throw new Error('Episode list is unavailable offline. Open this anime once while online to cache it.');
   }
@@ -91,14 +93,15 @@ export async function getHome(): Promise<HomeResult> {
   }
 }
 
-export async function getWatchNow(page = 1): Promise<{ success: boolean; data: MiniAnimeCard[]; page: number; totalPages: number }> {
+export type WatchNowResult = { success: boolean; data: MiniAnimeCard[]; page: number; totalPages: number };
+export async function getWatchNow(page = 1): Promise<WatchNowResult> {
   const key = `watch-now:${page}`;
   try {
-    const result = await apiFetch<{ success: boolean; data: MiniAnimeCard[]; page: number; totalPages: number }>(`/api/mobile/watch-now?page=${page}`);
+    const result = await apiFetch<WatchNowResult>(`/api/mobile/watch-now?page=${page}`);
     cachePut(key, result);
     return result;
   } catch {
-    const cached = cacheGet<typeof result>(key);
+    const cached = cacheGet<WatchNowResult>(key) ?? cacheGetStale<WatchNowResult>(key);
     if (cached) return cached;
     throw new Error('Watch Now is unavailable offline.');
   }
