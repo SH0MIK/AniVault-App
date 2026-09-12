@@ -1,23 +1,18 @@
 // SQLite mirror of the two tables the app actually needs offline:
 // `anime_list` (the watchlist) and `watch_history` (progress), matching the
-// real D1 columns used by api-lists.ts / importexport.ts on the backend —
-// not a guessed generic shape.
+// real D1 columns used by api-lists.ts / importexport.ts on the backend.
 import * as SQLite from 'expo-sqlite';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
 export function getDb(): SQLite.SQLiteDatabase {
-  if (!dbInstance) {
-    dbInstance = SQLite.openDatabaseSync('anivault.db');
-  }
+  if (!dbInstance) dbInstance = SQLite.openDatabaseSync('anivault.db');
   return dbInstance;
 }
 
 export function initDb(): void {
   const db = getDb();
   db.execSync(`
-    -- Mirrors the D1 "anime_list" table (see importexport.ts INSERT/UPDATE
-    -- statements for the authoritative column set).
     CREATE TABLE IF NOT EXISTS anime_list (
       anime_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
@@ -34,7 +29,6 @@ export function initDb(): void {
       PRIMARY KEY (user_id, anime_id)
     );
 
-    -- Mirrors the D1 "watch_history" table (see api-lists.ts save_progress).
     CREATE TABLE IF NOT EXISTS watch_history (
       anime_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
@@ -49,15 +43,17 @@ export function initDb(): void {
       PRIMARY KEY (user_id, anime_id)
     );
 
-    -- Queue of writes made while offline (or that simply haven't round-
-    -- tripped yet). Flushed in order on reconnect by sync.ts. Each row is
-    -- one call the app would otherwise have made directly against
-    -- /api/list.php or /api/watch_history.php.
     CREATE TABLE IF NOT EXISTS sync_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      endpoint TEXT NOT NULL,       -- 'list' | 'watch_history'
-      payload TEXT NOT NULL,        -- JSON body for the request
-      created_at INTEGER NOT NULL   -- epoch ms, for ordering
+      endpoint TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS content_cache (
+      cache_key TEXT PRIMARY KEY NOT NULL,
+      payload TEXT NOT NULL,
+      cached_at INTEGER NOT NULL
     );
   `);
 }
