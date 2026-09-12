@@ -1,6 +1,4 @@
-// SQLite mirror of the two tables the app actually needs offline:
-// `anime_list` (the watchlist) and `watch_history` (progress), matching the
-// real D1 columns used by api-lists.ts / importexport.ts on the backend.
+// SQLite mirror of the data the app needs for online sync and offline use.
 import * as SQLite from 'expo-sqlite';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
@@ -54,6 +52,19 @@ export function initDb(): void {
       cache_key TEXT PRIMARY KEY NOT NULL,
       payload TEXT NOT NULL,
       cached_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS downloads (
+      anime_id INTEGER NOT NULL,
+      episode_num INTEGER NOT NULL,
+      anime_title TEXT,
+      episode_title TEXT,
+      image TEXT,
+      local_uri TEXT NOT NULL,
+      source_uri TEXT,
+      bytes INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (anime_id, episode_num)
     );
   `);
 }
