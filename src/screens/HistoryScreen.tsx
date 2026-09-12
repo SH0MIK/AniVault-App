@@ -10,30 +10,17 @@ import { colors, radius, fonts } from '../theme';
 
 function localToHistory(item: LocalWatchProgress): HistoryItem {
   return {
-    animeId: item.anime_id,
-    title: item.anime_title ?? 'Unknown anime',
-    image: item.anime_image ?? '',
-    episodeNum: item.episode_num,
-    epTitle: item.ep_title,
-    epThumb: item.ep_thumb,
-    watchedAt: item.watched_at ?? new Date(0).toISOString(),
-    watchTime: item.watch_time,
-    episodeDuration: item.episode_duration,
+    animeId: item.anime_id, title: item.anime_title ?? 'Unknown anime', image: item.anime_image ?? '',
+    episodeNum: item.episode_num, epTitle: item.ep_title, epThumb: item.ep_thumb,
+    watchedAt: item.watched_at ?? new Date(0).toISOString(), watchTime: item.watch_time, episodeDuration: item.episode_duration,
   };
 }
 
 function remoteToLocal(userId: number, item: HistoryItem): LocalWatchProgress {
   return {
-    user_id: userId,
-    anime_id: item.animeId,
-    anime_title: item.title,
-    anime_image: item.image,
-    episode_num: item.episodeNum,
-    ep_title: item.epTitle,
-    ep_thumb: item.epThumb,
-    watch_time: item.watchTime,
-    episode_duration: item.episodeDuration,
-    watched_at: item.watchedAt,
+    user_id: userId, anime_id: item.animeId, anime_title: item.title, anime_image: item.image,
+    episode_num: item.episodeNum, ep_title: item.epTitle, ep_thumb: item.epThumb,
+    watch_time: item.watchTime, episode_duration: item.episodeDuration, watched_at: item.watchedAt,
   };
 }
 
@@ -49,9 +36,7 @@ export default function HistoryScreen() {
     setItems(getRecentlyWatched(user.id, 50).map(localToHistory));
   }, [user]);
 
-  useFocusEffect(useCallback(() => {
-    reloadLocal();
-  }, [reloadLocal]));
+  useFocusEffect(useCallback(() => { reloadLocal(); }, [reloadLocal]));
 
   const refresh = useCallback(async () => {
     if (!user) return;
@@ -60,13 +45,11 @@ export default function HistoryScreen() {
     setOffline(!online);
     if (online) {
       try {
-        // Pull the first server page into SQLite, but never replace newer
-        // local progress. The local DB remains the UI source of truth.
         const res = await getHistory(1);
         mergeRemoteHistory(user.id, res.data.map((item) => remoteToLocal(user.id, item)));
         reloadLocal();
       } catch {
-        // Keep the already-rendered local history.
+        // Keep local history visible if the server is unavailable.
       }
     }
     setRefreshing(false);
@@ -82,7 +65,7 @@ export default function HistoryScreen() {
       ListHeaderComponent={offline ? <View style={styles.offlineBanner}><Text style={styles.offlineText}>Offline — showing locally saved history</Text></View> : null}
       ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyTitle}>No watch history yet</Text><Text style={styles.emptyText}>Episodes you watch will appear here and remain available offline.</Text></View>}
       renderItem={({ item }) => (
-        <Pressable style={styles.row} onPress={() => navigation.navigate('Watch', { id: item.animeId, episode: item.episodeNum, title: item.title })}>
+        <Pressable style={styles.row} onPress={() => navigation.navigate('Watch', { animeId: item.animeId, episodeNum: item.episodeNum, title: item.title })}>
           <Image source={{ uri: item.epThumb ?? item.image }} style={styles.thumb} contentFit="cover" />
           <View style={{ flex: 1 }}>
             <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
