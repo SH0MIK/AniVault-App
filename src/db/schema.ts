@@ -38,7 +38,7 @@ export function initDb(): void {
       watch_time INTEGER NOT NULL DEFAULT 0,
       episode_duration INTEGER NOT NULL DEFAULT 0,
       watched_at TEXT,
-      PRIMARY KEY (user_id, anime_id)
+      PRIMARY KEY (user_id, anime_id, episode_num)
     );
 
     CREATE TABLE IF NOT EXISTS sync_queue (
@@ -67,4 +67,36 @@ export function initDb(): void {
       PRIMARY KEY (anime_id, episode_num)
     );
   `);
+
+  // Older development builds used (user_id, anime_id) as the history key,
+  // which silently overwrote episode progress. Rebuild that table once if the
+  // old primary-key shape is detected, preserving the newest row per anime.
+  try {
+    const cols = db.getAllSync<any>('PRAGMA table_info(watch_history)');
+    const pkCount = cols.filter((c: any) => c.pk > 0).length;
+    if (pkCount === 2) {
+      db.execSync(`
+        ALTER TABLE watch_history RENAME TO watch_history_legacy;
+        CREATE TABLE watch_history (
+          anime_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          anime_title TEXT,
+          anime_image TEXT,
+          episode_num INTEGER NOT NULL,
+          ep_title TEXT,
+          ep_thumb TEXT,
+          watch_time INTEGER NOT NULL DEFAULT 0,
+          episode_duration INTEGER NOT NULL DEFAULT 0,
+          watched_at TEXT,
+          PRIMARY KEY (user_id, anime_id, episode_num)
+        );
+        INSERT INTO watch_history (anime_id,user_id,anime_title,anime_image,episode_num,ep_title,ep_thumb,watch_time,episode_duration,watched_at)
+          SELECT anime_id,user_id,anime_title,anime_image,episode_num,ep_title,ep_thumb,watch_time,episode_duration,watched_at
+          FROM watch_history_legacy;
+        DROP TABLE watch_history_legacy;
+      `);
+    }
+  } catch {
+    // A failed migration must not prevent the rest of the app from opening.
+  }
 }
