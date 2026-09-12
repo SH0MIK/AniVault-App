@@ -27,7 +27,7 @@ export async function resolveAnimeHeaven(animeId: number, episodeNum: number) {
   return request(`/api/animeheaven_stream.php?anime=${animeId}&ep=${episodeNum}`);
 }
 
-export async function resolveStream(animeId: number, episodeNum: number, audio: 'sub' | 'dub' = 'sub') {
-  try { return await resolveAnikoto(animeId, episodeNum, audio); }
+export async function resolveStream(animeId: number, episodeNum: number, audio: 'sub' | 'dub' = 'sub', server = '') {
+  try { return await resolveAnikoto(animeId, episodeNum, audio, server); }
   catch { return resolveAnimeHeaven(animeId, episodeNum); }
 }
