@@ -64,11 +64,7 @@ export default function ProfileScreen() {
           <View style={styles.badgeRow}>
             {badges.map((b) => (
               <View key={b.id} style={[styles.badgeChip, { borderColor: b.color }]}>
-                {b.imageUrl ? (
-                  <Image source={{ uri: b.imageUrl }} style={styles.badgeImg} />
-                ) : (
-                  <Text style={{ fontSize: 14 }}>{b.iconText}</Text>
-                )}
+                {b.imageUrl ? <Image source={{ uri: b.imageUrl }} style={styles.badgeImg} /> : <Text style={{ fontSize: 14 }}>{b.iconText}</Text>}
                 <Text style={styles.badgeName}>{b.name}</Text>
               </View>
             ))}
@@ -85,14 +81,8 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>{label}</Text>
             </View>
           ))}
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{stats.total_episodes}</Text>
-            <Text style={styles.statLabel}>Episodes</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{stats.avg_score || '—'}</Text>
-            <Text style={styles.statLabel}>Avg Score</Text>
-          </View>
+          <View style={styles.statBox}><Text style={styles.statValue}>{stats.total_episodes}</Text><Text style={styles.statLabel}>Episodes</Text></View>
+          <View style={styles.statBox}><Text style={styles.statValue}>{stats.avg_score || '—'}</Text><Text style={styles.statLabel}>Avg Score</Text></View>
         </View>
       </View>
 
@@ -113,18 +103,24 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <Pressable style={styles.logoutBtn} onPress={() => navigation.navigate('History')}>
-        <Text style={styles.logoutText}>Watch History</Text>
+      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('Downloads')}>
+        <Text style={styles.actionIcon}>↓</Text>
+        <View style={styles.actionCopy}><Text style={styles.actionTitle}>Offline Downloads</Text><Text style={styles.actionSubtitle}>Watch downloaded episodes without internet</Text></View>
+        <Text style={styles.chevron}>›</Text>
       </Pressable>
-      <Pressable style={styles.logoutBtn} onPress={() => navigation.navigate('Announcements')}>
-        <Text style={styles.logoutText}>Announcements</Text>
+      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('History')}>
+        <Text style={styles.actionIcon}>◷</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Watch History</Text><Text style={styles.actionSubtitle}>Your recently watched episodes</Text></View><Text style={styles.chevron}>›</Text>
       </Pressable>
-      <Pressable style={styles.logoutBtn} onPress={() => navigation.navigate('AccountSettings')}>
-        <Text style={styles.logoutText}>Account Settings</Text>
+      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('Announcements')}>
+        <Text style={styles.actionIcon}>!</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Announcements</Text></View><Text style={styles.chevron}>›</Text>
       </Pressable>
-      <Pressable style={styles.logoutBtn} onPress={logout}>
-        <Text style={styles.logoutText}>Log out</Text>
+      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('AccountSettings')}>
+        <Text style={styles.actionIcon}>⚙</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Account Settings</Text></View><Text style={styles.chevron}>›</Text>
       </Pressable>
+      <Pressable style={[styles.actionBtn, styles.logoutBtn]} onPress={logout}>
+        <Text style={styles.actionIcon}>↪</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Log out</Text></View>
+      </Pressable>
+      <View style={{ height: 28 }} />
     </ScrollView>
   );
 }
@@ -152,6 +148,11 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 4, fontFamily: fonts.body },
   favCard: { marginRight: 10 },
   favPoster: { width: 90, height: 130, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  logoutBtn: { marginHorizontal: 16, marginTop: 8, marginBottom: 32, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
-  logoutText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 14 },
+  actionBtn: { marginHorizontal: 16, marginTop: 8, minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bgCard },
+  actionIcon: { width: 28, color: colors.accent, fontSize: 21, textAlign: 'center', fontFamily: fonts.bodyBold },
+  actionCopy: { flex: 1, marginLeft: 10 },
+  actionTitle: { color: colors.textPrimary, fontSize: 13, fontFamily: fonts.bodySemibold },
+  actionSubtitle: { color: colors.textMuted, fontSize: 10, marginTop: 3, fontFamily: fonts.body },
+  chevron: { color: colors.textMuted, fontSize: 24, marginLeft: 8 },
+  logoutBtn: { marginTop: 12, marginBottom: 4 },
 });
