@@ -7,7 +7,7 @@ import { apiFetch, getToken, setToken, clearToken, setUnauthorizedHandler } from
 import { fullSync } from '../db/sync';
 import { registerForPushNotifications } from '../api/push';
 
-const SITE_URL = 'https://anivault.co';
+const SITE_URL = 'https://www.anivault.co';
 
 export interface AniVaultUser {
   id: number;
