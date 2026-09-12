@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "AniVault",
+    "slug": "anivault",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "anivault",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0b0e",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "backgroundColor": "#0a0b0e",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.anivault.app"
+    },
+    "android": {
+      "package": "co.anivault.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0b0e"
+      }
+    },
+    "plugins": [
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#7c3aed"
+        }
+      ],
+      "./plugins/withDiscordPresence.js"
+    ]
+  }
+}
