@@ -6,7 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 
 // TODO: point this at your deployed Worker (anivault.co), not localhost —
 // left as a placeholder so you don't accidentally ship a dev URL.
-const API_BASE = 'https://anivault.co';
+const API_BASE = 'https://www.anivault.co';
 
 const TOKEN_KEY = 'anivault_session_token';
 

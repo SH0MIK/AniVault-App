@@ -2,7 +2,7 @@
 // (username/email/delete), one is new (bio/password, see api-mobile-auth.ts).
 import { apiFetch, apiFetchForm, getToken } from './client';
 
-const SITE_URL = 'https://anivault.co';
+const SITE_URL = 'https://www.anivault.co';
 
 /** MAL/AniList connect is OAuth — has to happen in a real browser, not a
  *  fetch call. This reuses the same session-id-as-cookie handoff the watch
