@@ -1,7 +1,9 @@
 // Global chat — a plain REST poll-based API (no WebSocket/Durable Object),
 // so the app just polls the same /api/chat action-dispatch endpoint the
-// website uses. Zero backend changes needed.
+// website uses. Messages are cached locally for offline reading; mutations
+// remain online-only because the server is the source of truth for chat.
 import { apiFetch, apiFetchForm } from './client';
+import { cacheGet, cacheGetStale, cachePut } from '../db/cache';
 
 export const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -21,11 +23,24 @@ export interface ChatMessage {
   reply_to: { id: number; username: string | null; message: string | null } | null;
 }
 
-export function getChatMessages(beforeId?: number): Promise<{ success: boolean; messages: ChatMessage[]; latest_id: number }> {
-  return apiFetch(`/api/chat?action=get${beforeId ? `&before_id=${beforeId}` : ''}`);
+type ChatResult = { success: boolean; messages: ChatMessage[]; latest_id: number };
+const CACHE_KEY = 'chat:latest';
+
+export async function getChatMessages(beforeId?: number): Promise<ChatResult> {
+  try {
+    const result = await apiFetch<ChatResult>(`/api/chat?action=get${beforeId ? `&before_id=${beforeId}` : ''}`);
+    if (!beforeId) cachePut(CACHE_KEY, result);
+    return result;
+  } catch {
+    if (!beforeId) {
+      const cached = cacheGet<ChatResult>(CACHE_KEY) ?? cacheGetStale<ChatResult>(CACHE_KEY);
+      if (cached) return cached;
+    }
+    throw new Error('Chat is unavailable offline.');
+  }
 }
 
-export function pollChatMessages(afterId: number): Promise<{ success: boolean; messages: ChatMessage[]; latest_id: number }> {
+export async function pollChatMessages(afterId: number): Promise<ChatResult> {
   return apiFetch(`/api/chat?action=poll&after_id=${afterId}`);
 }
 
@@ -53,9 +68,6 @@ export function getPresence(): Promise<{ success: boolean; online: number; typin
   return apiFetch('/api/chat?action=presence');
 }
 
-/** message/username/reply_to text comes back HTML-escaped (h()) since the
- *  website renders it directly into HTML — RN Text doesn't parse entities,
- *  so unescape the handful the server actually produces before display. */
 export function unescapeHtml(s: string): string {
   return s
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
