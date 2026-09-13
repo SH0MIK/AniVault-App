@@ -1,140 +1,26 @@
-// Fully offline: everything here reads straight from SQLite (listRepo /
-// watchRepo), so this screen renders instantly with no loading spinner even
-// with no connection — a pull-to-refresh is the only thing that touches
-// the network, via fullSync.
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, SectionList } from 'react-native';
+import { FlatList, Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getLocalList, LocalAnimeListEntry } from '../db/listRepo';
 import { getRecentlyWatched, LocalWatchProgress } from '../db/watchRepo';
 import { fullSync, isOnline } from '../db/sync';
 import { useAuth } from '../auth/AuthContext';
-import { colors, radius, fonts } from '../theme';
+import { WebSectionHeader } from '../components/WebChrome';
+import { colors, fonts } from '../theme';
 
-const STATUS_LABELS: Record<string, string> = {
-  watching: 'Watching', completed: 'Completed', plan_to_watch: 'Plan to Watch', on_hold: 'On Hold', dropped: 'Dropped',
-};
-const STATUS_ORDER = ['watching', 'plan_to_watch', 'on_hold', 'completed', 'dropped'];
+const STATUS_LABELS:Record<string,string>={watching:'Watching',completed:'Completed',plan_to_watch:'Plan to Watch',on_hold:'On Hold',dropped:'Dropped'};
+const ORDER=['watching','plan_to_watch','on_hold','completed','dropped'];
 
-export default function MyListScreen() {
-  const { user } = useAuth();
-  const navigation = useNavigation<any>();
-  const [continueWatching, setContinueWatching] = useState<LocalWatchProgress[]>([]);
-  const [list, setList] = useState<LocalAnimeListEntry[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [offline, setOffline] = useState(false);
-
-  const reloadFromLocal = useCallback(() => {
-    if (!user) return;
-    setContinueWatching(getRecentlyWatched(user.id, 10));
-    setList(getLocalList(user.id));
-  }, [user]);
-
-  // Local data reloads every time the tab regains focus (e.g. coming back
-  // from marking an episode watched) — this is instant, no network.
-  useFocusEffect(reloadFromLocal);
-
-  const onRefresh = useCallback(async () => {
-    if (!user) return;
-    setRefreshing(true);
-    const online = await isOnline();
-    setOffline(!online);
-    if (online) {
-      await fullSync(user.id).catch(() => {});
-      reloadFromLocal();
-    }
-    setRefreshing(false);
-  }, [user, reloadFromLocal]);
-
-  const sections = STATUS_ORDER
-    .map((status) => ({ title: STATUS_LABELS[status], data: list.filter((e) => e.status === status) }))
-    .filter((s) => s.data.length > 0);
-
-  return (
-    <SectionList
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
-      ListHeaderComponent={
-        <>
-          {offline && (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineText}>Offline — showing your last synced list</Text>
-            </View>
-          )}
-          {continueWatching.length > 0 && (
-            <View style={styles.continueSection}>
-              <Text style={styles.sectionHeader}>Continue Watching</Text>
-              <FlatList
-                horizontal
-                data={continueWatching}
-                keyExtractor={(item) => `${item.anime_id}-${item.episode_num}`}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 12 }}
-                renderItem={({ item }) => {
-                  const pct = item.episode_duration > 0 ? Math.min(1, item.watch_time / item.episode_duration) : 0;
-                  return (
-                    <Pressable
-                      style={styles.continueCard}
-                      onPress={() => navigation.navigate('AnimeDetail', { id: item.anime_id, title: item.anime_title ?? undefined })}
-                    >
-                      <Image source={{ uri: item.anime_image ?? undefined }} style={styles.continuePoster} contentFit="cover" />
-                      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct * 100}%` }]} /></View>
-                      <Text style={styles.continueTitle} numberOfLines={1}>{item.anime_title}</Text>
-                      <Text style={styles.continueEp}>Episode {item.episode_num}</Text>
-                    </Pressable>
-                  );
-                }}
-              />
-            </View>
-          )}
-        </>
-      }
-      sections={sections}
-      keyExtractor={(item) => String(item.anime_id)}
-      renderSectionHeader={({ section }) => <Text style={styles.sectionHeader}>{section.title}</Text>}
-      renderItem={({ item }) => (
-        <Pressable
-          style={styles.listRow}
-          onPress={() => navigation.navigate('AnimeDetail', { id: item.anime_id, title: item.anime_title ?? undefined })}
-        >
-          <Image source={{ uri: item.anime_image ?? undefined }} style={styles.listPoster} contentFit="cover" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.listTitle} numberOfLines={1}>{item.anime_title}</Text>
-            <Text style={styles.listMeta}>
-              {item.episodes_watched}{item.anime_episodes ? `/${item.anime_episodes}` : ''} episodes
-              {item.score ? ` · ★ ${item.score}` : ''}
-            </Text>
-          </View>
-        </Pressable>
-      )}
-      ListEmptyComponent={
-        continueWatching.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>Your list is empty. Browse to add something.</Text>
-          </View>
-        ) : null
-      }
-    />
-  );
+export default function MyListScreen(){
+ const {user}=useAuth(); const navigation=useNavigation<any>(); const [list,setList]=useState<LocalAnimeListEntry[]>([]); const [continueWatching,setContinue]=useState<LocalWatchProgress[]>([]); const [refreshing,setRefreshing]=useState(false); const [offline,setOffline]=useState(false);
+ const reload=useCallback(()=>{if(!user)return;setList(getLocalList(user.id));setContinue(getRecentlyWatched(user.id,10));},[user]); useFocusEffect(reload);
+ const refresh=useCallback(async()=>{if(!user)return;setRefreshing(true);const online=await isOnline();setOffline(!online);if(online){await fullSync(user.id).catch(()=>{});reload();}setRefreshing(false);},[user,reload]);
+ const sections=ORDER.map(s=>({title:STATUS_LABELS[s],data:list.filter(x=>x.status===s)})).filter(x=>x.data.length);
+ return <SectionList style={styles.container} sections={sections} keyExtractor={x=>String(x.anime_id)} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent}/>} ListHeaderComponent={<>
+   {offline?<View style={styles.offline}><Ionicons name="cloud-offline-outline" size={14} color={colors.gold}/><Text style={styles.offlineText}>Offline — showing your last synced list</Text></View>:null}
+   {continueWatching.length>0?<><WebSectionHeader title="Continue Watching"/><FlatList horizontal data={continueWatching} keyExtractor={x=>`${x.anime_id}-${x.episode_num}`} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cwList} renderItem={({item})=>{const pct=item.episode_duration>0?Math.min(1,item.watch_time/item.episode_duration):0;return <Pressable style={styles.cwCard} onPress={()=>navigation.navigate('Watch',{animeId:item.anime_id,episodeNum:item.episode_num,title:item.anime_title??undefined})}><View style={styles.cwImageWrap}><Image source={{uri:item.anime_image??undefined}} style={styles.cwImage} contentFit="cover"/><View style={styles.cwShade}/><View style={styles.play}><Ionicons name="play" size={13} color="#fff"/></View><Text style={styles.left}>{Math.max(1,Math.round((item.episode_duration-item.watch_time)/60))}m left</Text><Text style={styles.epBadge}>EP {item.episode_num}</Text></View><View style={styles.progress}><View style={[styles.progressFill,{width:`${pct*100}%`}]}/></View><Text style={styles.cwTitle} numberOfLines={1}>{item.anime_title}</Text><Text style={styles.cwEp} numberOfLines={1}>{item.ep_title||`Episode ${item.episode_num}`}</Text></Pressable>}}/></>:null}
+ </>} renderSectionHeader={({section})=><WebSectionHeader title={section.title}/>} renderItem={({item})=><Pressable style={styles.row} onPress={()=>navigation.navigate('AnimeDetail',{id:item.anime_id,title:item.anime_title??undefined})}><View style={styles.posterWrap}><Image source={{uri:item.anime_image??undefined}} style={styles.poster} contentFit="cover"/><View style={styles.rowBadge}><Text style={styles.rowBadgeText}>{STATUS_LABELS[item.status]||item.status}</Text></View></View><View style={styles.info}><Text style={styles.title} numberOfLines={2}>{item.anime_title}</Text><Text style={styles.meta}>{item.episodes_watched}{item.anime_episodes?`/${item.anime_episodes}`:''} episodes{item.score?` · ★ ${item.score}`:''}</Text></View><Ionicons name="chevron-forward" size={18} color={colors.textMuted}/></Pressable>} ListEmptyComponent={<View style={styles.empty}><Ionicons name="albums-outline" size={38} color={colors.textMuted}/><Text style={styles.emptyTitle}>Your list is empty</Text><Text style={styles.emptyText}>Browse anime and add something to your vault.</Text></View>} />;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  offlineBanner: { backgroundColor: colors.bgSurface, paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.borderAccent },
-  offlineText: { color: colors.gold, fontSize: 12, textAlign: 'center', fontFamily: fonts.body },
-  continueSection: { paddingTop: 12 },
-  sectionHeader: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.displayMedium, paddingHorizontal: 16, marginBottom: 8, marginTop: 8 },
-  continueCard: { width: 140, marginRight: 12 },
-  continuePoster: { width: 140, height: 90, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  progressTrack: { height: 3, backgroundColor: colors.bgHover, borderRadius: 2, marginTop: 4 },
-  progressFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
-  continueTitle: { color: colors.textPrimary, fontSize: 12, marginTop: 6, fontFamily: fonts.bodyMedium },
-  continueEp: { color: colors.textMuted, fontSize: 11, fontFamily: fonts.body },
-  listRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 12 },
-  listPoster: { width: 46, height: 64, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  listTitle: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.bodyMedium },
-  listMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: fonts.body },
-  emptyState: { padding: 32, alignItems: 'center' },
-  emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center', fontFamily: fonts.body },
-});
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:colors.bgBase},offline:{marginHorizontal:15,marginTop:10,padding:9,borderWidth:1,borderColor:colors.borderAccent,borderRadius:8,backgroundColor:colors.bgSurface,flexDirection:'row',alignItems:'center',gap:7},offlineText:{color:colors.gold,fontFamily:fonts.body,fontSize:10},cwList:{paddingHorizontal:15,paddingBottom:3},cwCard:{width:220,marginRight:12},cwImageWrap:{height:124,borderRadius:9,overflow:'hidden',backgroundColor:colors.bgCard,borderWidth:1,borderColor:colors.border,position:'relative'},cwImage:{width:'100%',height:'100%'},cwShade:{position:'absolute',left:0,right:0,bottom:0,height:58,backgroundColor:'rgba(0,0,0,.28)'},play:{position:'absolute',left:10,top:10,width:38,height:38,borderRadius:19,backgroundColor:'rgba(124,58,237,.92)',alignItems:'center',justifyContent:'center'},left:{position:'absolute',left:9,bottom:8,color:'#fff',fontFamily:fonts.bodyMedium,fontSize:9},epBadge:{position:'absolute',right:8,bottom:8,color:'#fff',backgroundColor:'rgba(0,0,0,.72)',paddingHorizontal:6,paddingVertical:3,borderRadius:4,fontFamily:fonts.bodyBold,fontSize:8},progress:{height:3,backgroundColor:colors.bgHover},progressFill:{height:3,backgroundColor:colors.accent},cwTitle:{color:colors.textMuted,fontFamily:fonts.bodyMedium,fontSize:9.5,marginTop:6,textTransform:'uppercase'},cwEp:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:11,marginTop:2},row:{marginHorizontal:15,minHeight:82,paddingVertical:10,borderBottomWidth:1,borderBottomColor:colors.border,flexDirection:'row',alignItems:'center',gap:11},posterWrap:{width:48,height:68,borderRadius:6,overflow:'hidden',position:'relative',backgroundColor:colors.bgCard},poster:{width:'100%',height:'100%'},rowBadge:{position:'absolute',left:2,right:2,bottom:2,backgroundColor:'rgba(124,58,237,.9)',borderRadius:3,paddingVertical:2},rowBadgeText:{color:'#fff',fontFamily:fonts.bodyBold,fontSize:6,textAlign:'center'},info:{flex:1},title:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:13,lineHeight:17},meta:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10,marginTop:4},empty:{alignItems:'center',paddingTop:70,paddingHorizontal:35},emptyTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:15,marginTop:12},emptyText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:11,textAlign:'center',marginTop:5}});
