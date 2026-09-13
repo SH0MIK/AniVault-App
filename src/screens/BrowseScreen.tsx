@@ -1,209 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TextInput, Pressable, ActivityIndicator, StyleSheet, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { browse, BrowseItem, BrowseResult } from '../api/content';
-import { colors, radius, fonts } from '../theme';
+import { WebSectionHeader } from '../components/WebChrome';
+import { colors, fonts, radius } from '../theme';
 
-export default function BrowseScreen() {
-  const navigation = useNavigation<any>();
-  const [query, setQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
-  const [items, setItems] = useState<BrowseItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [genres, setGenres] = useState<BrowseResult['genres']>([]);
-  const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
-  const [status, setStatus] = useState('');
+const FILTERS = [{value:'',label:'All'},{value:'airing',label:'Airing'},{value:'complete',label:'Completed'},{value:'upcoming',label:'Upcoming'}];
 
-  const load = useCallback(async (q: string, pageNum: number, append: boolean, genreIds: number[], statusValue: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await browse({ q, page: pageNum, genres: genreIds, status: statusValue || undefined });
-      setItems((prev) => (append ? [...prev, ...res.data] : res.data));
-      setHasNext(!!res.pagination?.has_next_page);
-      setPage(pageNum);
-      if (res.genres?.length) setGenres(res.genres);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load anime.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load('', 1, false, [], ''); }, [load]);
-
-  const runSearch = () => {
-    const next = query.trim();
-    setSubmittedQuery(next);
-    load(next, 1, false, selectedGenres, status);
-  };
-
-  const clearSearch = () => {
-    setQuery('');
-    setSubmittedQuery('');
-    load('', 1, false, selectedGenres, status);
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load(submittedQuery, 1, false, selectedGenres, status);
-    setRefreshing(false);
-  };
-
-  const onLoadMore = () => {
-    if (!loading && hasNext) load(submittedQuery, page + 1, true, selectedGenres, status);
-  };
-
-  const onToggleGenre = (genreId: number) => {
-    const next = selectedGenres.includes(genreId) ? selectedGenres.filter((g) => g !== genreId) : [...selectedGenres, genreId];
-    setSelectedGenres(next);
-    load(submittedQuery, 1, false, next, status);
-  };
-
-  const statuses = useMemo(() => [
-    { value: '', label: 'All' },
-    { value: 'airing', label: 'Airing' },
-    { value: 'complete', label: 'Completed' },
-    { value: 'upcoming', label: 'Upcoming' },
-  ], []);
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search anime..."
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={runSearch}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={clearSearch} hitSlop={10}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.filterHeader}>
-        <Text style={styles.heading}>{submittedQuery ? `Results for “${submittedQuery}”` : 'Browse Anime'}</Text>
-        {loading && items.length > 0 && <ActivityIndicator color={colors.accent} size="small" />}
-      </View>
-
-      <FlatList
-        horizontal
-        data={statuses}
-        keyExtractor={(s) => s.value || 'all'}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterBar}
-        renderItem={({ item }) => (
-          <Pressable
-            style={[styles.filterChip, status === item.value && styles.filterChipActive]}
-            onPress={() => { setStatus(item.value); load(submittedQuery, 1, false, selectedGenres, item.value); }}
-          >
-            <Text style={[styles.filterText, status === item.value && styles.filterTextActive]}>{item.label}</Text>
-          </Pressable>
-        )}
-      />
-
-      {genres.length > 0 && (
-        <FlatList
-          horizontal
-          data={genres}
-          keyExtractor={(g) => String(g.mal_id)}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterBar}
-          renderItem={({ item }) => {
-            const active = selectedGenres.includes(item.mal_id);
-            return (
-              <Pressable style={[styles.genreChip, active && styles.genreChipActive]} onPress={() => onToggleGenre(item.mal_id)}>
-                <Text style={[styles.genreText, active && styles.filterTextActive]}>{item.name}</Text>
-              </Pressable>
-            );
-          }}
-        />
-      )}
-
-      {error && (
-        <View style={styles.errorBox}>
-          <Ionicons name="cloud-offline-outline" size={18} color={colors.accent} />
-          <Text style={styles.error}>{error}</Text>
-        </View>
-      )}
-
-      <FlatList
-        data={items}
-        keyExtractor={(item) => String(item.id)}
-        numColumns={3}
-        contentContainerStyle={styles.grid}
-        columnWrapperStyle={styles.column}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
-        onEndReached={onLoadMore}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={!loading ? (
-          <View style={styles.empty}>
-            <Ionicons name="film-outline" size={42} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No anime found</Text>
-            <Text style={styles.emptyText}>Try another title, genre, or filter.</Text>
-          </View>
-        ) : null}
-        ListFooterComponent={loading && items.length === 0 ? <ActivityIndicator color={colors.accent} style={{ marginTop: 30 }} /> : loading ? <ActivityIndicator color={colors.accent} style={{ margin: 16 }} /> : null}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })}>
-            <View style={styles.posterWrap}>
-              <Image source={{ uri: item.image }} style={styles.poster} contentFit="cover" transition={150} />
-              {item.userStatus && <View style={styles.badge}><Text style={styles.badgeText}>{item.userStatus}</Text></View>}
-              {item.score != null && <View style={styles.score}><Ionicons name="star" size={9} color="#fff" /><Text style={styles.scoreText}>{item.score.toFixed(1)}</Text></View>}
-            </View>
-            <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.meta} numberOfLines={1}>{item.type || 'Anime'}{item.episodes ? ` • ${item.episodes} eps` : ''}</Text>
-          </Pressable>
-        )}
-      />
-    </View>
-  );
+export default function BrowseScreen(){
+ const navigation=useNavigation<any>(); const route=useRoute<any>();
+ const [query,setQuery]=useState(route.params?.q ?? ''); const [submitted,setSubmitted]=useState(route.params?.q ?? '');
+ const [items,setItems]=useState<BrowseItem[]>([]); const [page,setPage]=useState(1); const [hasNext,setHasNext]=useState(false); const [loading,setLoading]=useState(false); const [refreshing,setRefreshing]=useState(false); const [error,setError]=useState<string|null>(null);
+ const [genres,setGenres]=useState<BrowseResult['genres']>([]); const [selectedGenres,setSelectedGenres]=useState<number[]>([]); const [status,setStatus]=useState('');
+ const load=useCallback(async(q:string,p:number,append:boolean,g:number[],s:string)=>{setLoading(true);setError(null);try{const res=await browse({q,page:p,genres:g,status:s||undefined});setItems(prev=>append?[...prev,...res.data]:res.data);setHasNext(!!res.pagination?.has_next_page);setPage(p);if(res.genres?.length)setGenres(res.genres);}catch(e:any){setError(e.message??'Failed to load anime.');}finally{setLoading(false);}},[]);
+ useEffect(()=>{load(submitted,1,false,selectedGenres,status);},[]);
+ const runSearch=()=>{const q=query.trim();setSubmitted(q);load(q,1,false,selectedGenres,status);};
+ const refresh=async()=>{setRefreshing(true);await load(submitted,1,false,selectedGenres,status);setRefreshing(false);};
+ const toggleGenre=(id:number)=>{const next=selectedGenres.includes(id)?selectedGenres.filter(x=>x!==id):[...selectedGenres,id];setSelectedGenres(next);load(submitted,1,false,next,status);};
+ const statuses=useMemo(()=>FILTERS,[]);
+ return <View style={styles.container}>
+   <View style={styles.searchArea}><View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted}/><TextInput value={query} onChangeText={setQuery} onSubmitEditing={runSearch} placeholder="Search anime..." placeholderTextColor={colors.textMuted} style={styles.searchInput} returnKeyType="search" autoCorrect={false}/>{query?<Pressable onPress={()=>{setQuery('');setSubmitted('');load('',1,false,selectedGenres,status);}}><Ionicons name="close-circle" size={18} color={colors.textMuted}/></Pressable>:null}</View></View>
+   <WebSectionHeader title={submitted?`Results for “${submitted}”`:'Browse Anime'} action={loading&&items.length?'Loading…':undefined}/>
+   <FlatList horizontal data={statuses} keyExtractor={x=>x.value||'all'} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({item})=><Pressable onPress={()=>{setStatus(item.value);load(submitted,1,false,selectedGenres,item.value);}} style={[styles.chip,status===item.value&&styles.chipActive]}><Text style={[styles.chipText,status===item.value&&styles.chipTextActive]}>{item.label}</Text></Pressable>}/>
+   {genres.length>0?<FlatList horizontal data={genres} keyExtractor={g=>String(g.mal_id)} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} renderItem={({item})=>{const active=selectedGenres.includes(item.mal_id);return <Pressable onPress={()=>toggleGenre(item.mal_id)} style={[styles.genre,active&&styles.chipActive]}><Text style={[styles.genreText,active&&styles.chipTextActive]}>{item.name}</Text></Pressable>}}/>:null}
+   {error?<View style={styles.error}><Ionicons name="cloud-offline-outline" size={17} color={colors.accent}/><Text style={styles.errorText}>{error}</Text></View>:null}
+   <FlatList data={items} numColumns={3} keyExtractor={x=>String(x.id)} contentContainerStyle={styles.grid} columnWrapperStyle={styles.row} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent}/>} onEndReached={()=>{if(!loading&&hasNext)load(submitted,page+1,true,selectedGenres,status)}} onEndReachedThreshold={.55} ListEmptyComponent={!loading?<View style={styles.empty}><Ionicons name="film-outline" size={40} color={colors.textMuted}/><Text style={styles.emptyTitle}>No anime found</Text><Text style={styles.emptyText}>Try another title, genre, or filter.</Text></View>:null} ListFooterComponent={loading?<ActivityIndicator color={colors.accent} style={{margin:18}}/>:null} renderItem={({item})=><Pressable style={styles.card} onPress={()=>navigation.navigate('AnimeDetail',{id:item.id,title:item.title})}>
+      <View style={styles.posterWrap}><Image source={{uri:item.image}} style={styles.poster} contentFit="cover" transition={120}/><View style={styles.shade}/>{item.score!=null?<View style={styles.score}><Ionicons name="star" size={9} color={colors.gold}/><Text style={styles.scoreText}>{item.score.toFixed(1)}</Text></View>:null}{item.userStatus?<View style={styles.status}><Text style={styles.statusText}>{item.userStatus}</Text></View>:null}<View style={styles.add}><Ionicons name="add" size={16} color="#fff"/></View></View>
+      <Text style={styles.title} numberOfLines={2}>{item.title}</Text><Text style={styles.meta} numberOfLines={1}>{item.type||'Anime'}{item.episodes?` · ${item.episodes} eps`:''}</Text>
+    </Pressable>}/>
+ </View>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  topBar: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4 },
-  searchWrap: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: 14, fontFamily: fonts.body, paddingVertical: 0 },
-  filterHeader: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heading: { color: colors.textPrimary, fontSize: 17, fontFamily: fonts.displayMedium },
-  filterBar: { paddingHorizontal: 12, paddingVertical: 7, gap: 8 },
-  filterChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard, borderRadius: radius.lg, paddingHorizontal: 13, paddingVertical: 7, marginRight: 7 },
-  filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  filterText: { color: colors.textSecondary, fontSize: 12, fontFamily: fonts.bodyMedium },
-  filterTextActive: { color: '#fff' },
-  genreChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgSurface, borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 6, marginRight: 7 },
-  genreChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  genreText: { color: colors.textSecondary, fontSize: 11, fontFamily: fonts.bodyMedium },
-  errorBox: { marginHorizontal: 12, marginVertical: 6, padding: 10, flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.bgCard, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  error: { flex: 1, color: colors.textSecondary, fontSize: 12, fontFamily: fonts.body },
-  grid: { paddingHorizontal: 8, paddingBottom: 28 },
-  column: { gap: 0 },
-  card: { width: '33.333%', paddingHorizontal: 4, marginBottom: 13 },
-  posterWrap: { position: 'relative' },
-  poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  cardTitle: { color: colors.textPrimary, fontSize: 11.5, lineHeight: 15, marginTop: 5, fontFamily: fonts.bodyMedium },
-  meta: { color: colors.textMuted, fontSize: 9.5, marginTop: 2, fontFamily: fonts.body },
-  badge: { position: 'absolute', top: 6, left: 6, backgroundColor: colors.accent, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
-  badgeText: { color: '#fff', fontSize: 8.5, fontFamily: fonts.bodySemibold },
-  score: { position: 'absolute', right: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 3 },
-  scoreText: { color: '#fff', fontSize: 8.5, fontFamily: fonts.bodySemibold },
-  empty: { alignItems: 'center', paddingTop: 70, paddingHorizontal: 30 },
-  emptyTitle: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.displayMedium, marginTop: 12 },
-  emptyText: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body, marginTop: 5, textAlign: 'center' },
-});
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:colors.bgBase},searchArea:{paddingHorizontal:15,paddingTop:14},search:{height:46,borderRadius:9,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,flexDirection:'row',alignItems:'center',gap:9,paddingHorizontal:12},searchInput:{flex:1,color:colors.textPrimary,fontFamily:fonts.body,fontSize:14},chips:{paddingHorizontal:15,paddingBottom:4,gap:7},chip:{borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,borderRadius:999,paddingHorizontal:13,paddingVertical:7,marginRight:2},chipActive:{backgroundColor:colors.accent,borderColor:colors.accent},chipText:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:11},chipTextActive:{color:'#fff'},genre:{borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgCard,borderRadius:999,paddingHorizontal:11,paddingVertical:6,marginRight:2},genreText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10},error:{marginHorizontal:15,marginTop:10,padding:10,borderWidth:1,borderColor:colors.borderAccent,borderRadius:8,backgroundColor:colors.bgSurface,flexDirection:'row',gap:8,alignItems:'center'},errorText:{flex:1,color:colors.textSecondary,fontFamily:fonts.body,fontSize:11},grid:{paddingHorizontal:11,paddingTop:14,paddingBottom:35},row:{justifyContent:'flex-start'},card:{width:'33.333%',paddingHorizontal:4,marginBottom:16},posterWrap:{width:'100%',aspectRatio:2/3,overflow:'hidden',borderRadius:8,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgCard},poster:{width:'100%',height:'100%'},shade:{position:'absolute',left:0,right:0,bottom:0,height:42,backgroundColor:'rgba(0,0,0,.2)'},score:{position:'absolute',top:6,left:6,backgroundColor:'rgba(0,0,0,.78)',borderRadius:4,paddingHorizontal:5,paddingVertical:3,flexDirection:'row',gap:3},scoreText:{color:'#fff',fontFamily:fonts.bodyBold,fontSize:8.5},status:{position:'absolute',left:6,bottom:6,backgroundColor:colors.accent,borderRadius:4,paddingHorizontal:5,paddingVertical:3},statusText:{color:'#fff',fontFamily:fonts.bodyBold,fontSize:7.5,textTransform:'uppercase'},add:{position:'absolute',right:6,bottom:6,width:25,height:25,borderRadius:13,backgroundColor:colors.accent,alignItems:'center',justifyContent:'center'},title:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:11.5,lineHeight:15,marginTop:6},meta:{color:colors.textMuted,fontFamily:fonts.body,fontSize:9.5,marginTop:2},empty:{alignItems:'center',paddingTop:65,paddingHorizontal:30},emptyTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:15,marginTop:12},emptyText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:11,textAlign:'center',marginTop:5}});
