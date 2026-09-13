@@ -1,46 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, StyleSheet, RefreshControl } from 'react-native';
 import { Image } from 'expo-image';
 import { getAnnouncements, Announcement } from '../api/content';
 import { colors, radius, fonts } from '../theme';
+import { WebHeader, WebSectionHeader, WebFooter } from '../components/WebChrome';
 
 export default function AnnouncementsScreen() {
-  const [items, setItems] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getAnnouncements().then((res) => setItems(res.data)).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
-
-  return (
-    <FlatList
-      style={styles.container}
-      data={items}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ padding: 16 }}
-      ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyText}>No announcements yet.</Text></View>}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" />}
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.content}>{item.content}</Text>
-          <Text style={styles.time}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-        </View>
-      )}
-    />
-  );
+  const [items,setItems]=useState<Announcement[]>([]); const [loading,setLoading]=useState(true); const [refreshing,setRefreshing]=useState(false); const [error,setError]=useState<string|null>(null);
+  const load=async()=>{setError(null);try{const res=await getAnnouncements();setItems(res.data??[])}catch(e:any){setError(e?.message??'Unable to load announcements.')}finally{setLoading(false);setRefreshing(false)}};
+  useEffect(()=>{load()},[]);
+  if(loading)return <View style={styles.center}><ActivityIndicator color={colors.accent}/></View>;
+  return <View style={styles.container}><WebHeader title="Announcements"/><FlatList data={items} keyExtractor={i=>String(i.id)} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>{setRefreshing(true);load()}} tintColor={colors.accent}/>} ListHeaderComponent={<><View style={styles.hero}><Text style={styles.kicker}>ANIVAULT INFO</Text><Text style={styles.heroTitle}>Announcements</Text><Text style={styles.heroSub}>News, updates, maintenance notices, and everything new around AniVault.</Text></View><WebSectionHeader title="LATEST UPDATES"/></>} ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyTitle}>{error?'COULD NOT LOAD':'NO ANNOUNCEMENTS'}</Text><Text style={styles.emptyText}>{error??'There are no announcements right now.'}</Text></View>} renderItem={({item})=><View style={styles.card}>{item.imageUrl&&<Image source={{uri:item.imageUrl}} style={styles.image} contentFit="cover"/>}<Text style={styles.title}>{item.title}</Text><Text style={styles.text}>{item.content}</Text><Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text></View>} ListFooterComponent={<WebFooter/>}/></View>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
-  card: { backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  image: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.sm, marginBottom: 10, backgroundColor: colors.bgSurface },
-  title: { color: colors.textPrimary, fontSize: 15, fontFamily: fonts.bodySemibold, marginBottom: 6 },
-  content: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, fontFamily: fonts.body },
-  time: { color: colors.textMuted, fontSize: 11, marginTop: 8, fontFamily: fonts.body },
-  emptyState: { padding: 32, alignItems: 'center' },
-  emptyText: { color: colors.textMuted, fontSize: 13, fontFamily: fonts.body },
-});
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:colors.bgBase},center:{flex:1,backgroundColor:colors.bgBase,alignItems:'center',justifyContent:'center'},content:{paddingBottom:10},hero:{paddingHorizontal:16,paddingTop:20,paddingBottom:14},kicker:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:9,letterSpacing:1.5},heroTitle:{color:colors.textPrimary,fontFamily:fonts.display,fontSize:24,marginTop:6},heroSub:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:12,lineHeight:18,marginTop:6},card:{marginHorizontal:16,marginBottom:14,padding:14,backgroundColor:colors.bgCard,borderRadius:radius.md,borderWidth:1,borderColor:colors.border},image:{width:'100%',aspectRatio:16/9,borderRadius:radius.sm,marginBottom:11,backgroundColor:colors.bgSurface},title:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:15,marginBottom:6},text:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:13,lineHeight:19},date:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10,marginTop:9},empty:{padding:50,alignItems:'center'},emptyTitle:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:10,letterSpacing:1.2},emptyText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:12,textAlign:'center',marginTop:7}});
