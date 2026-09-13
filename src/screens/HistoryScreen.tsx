@@ -1,93 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getHistory, HistoryItem } from '../api/content';
 import { getRecentlyWatched, LocalWatchProgress, mergeRemoteHistory } from '../db/watchRepo';
 import { isOnline } from '../db/sync';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, fonts } from '../theme';
-
-function localToHistory(item: LocalWatchProgress): HistoryItem {
-  return {
-    animeId: item.anime_id, title: item.anime_title ?? 'Unknown anime', image: item.anime_image ?? '',
-    episodeNum: item.episode_num, epTitle: item.ep_title, epThumb: item.ep_thumb,
-    watchedAt: item.watched_at ?? new Date(0).toISOString(), watchTime: item.watch_time, episodeDuration: item.episode_duration,
-  };
-}
-
-function remoteToLocal(userId: number, item: HistoryItem): LocalWatchProgress {
-  return {
-    user_id: userId, anime_id: item.animeId, anime_title: item.title, anime_image: item.image,
-    episode_num: item.episodeNum, ep_title: item.epTitle, ep_thumb: item.epThumb,
-    watch_time: item.watchTime, episode_duration: item.episodeDuration, watched_at: item.watchedAt,
-  };
-}
-
-export default function HistoryScreen() {
-  const { user } = useAuth();
-  const navigation = useNavigation<any>();
-  const [items, setItems] = useState<HistoryItem[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [offline, setOffline] = useState(false);
-
-  const reloadLocal = useCallback(() => {
-    if (!user) return;
-    setItems(getRecentlyWatched(user.id, 50).map(localToHistory));
-  }, [user]);
-
-  useFocusEffect(useCallback(() => { reloadLocal(); }, [reloadLocal]));
-
-  const refresh = useCallback(async () => {
-    if (!user) return;
-    setRefreshing(true);
-    const online = await isOnline();
-    setOffline(!online);
-    if (online) {
-      try {
-        const res = await getHistory(1);
-        mergeRemoteHistory(user.id, res.data.map((item) => remoteToLocal(user.id, item)));
-        reloadLocal();
-      } catch {
-        // Keep local history visible if the server is unavailable.
-      }
-    }
-    setRefreshing(false);
-  }, [user, reloadLocal]);
-
-  return (
-    <FlatList
-      style={styles.container}
-      data={items}
-      keyExtractor={(item) => `${item.animeId}-${item.episodeNum}-${item.watchedAt}`}
-      contentContainerStyle={{ paddingVertical: 8, flexGrow: items.length ? 0 : 1 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
-      ListHeaderComponent={offline ? <View style={styles.offlineBanner}><Text style={styles.offlineText}>Offline — showing locally saved history</Text></View> : null}
-      ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyTitle}>No watch history yet</Text><Text style={styles.emptyText}>Episodes you watch will appear here and remain available offline.</Text></View>}
-      renderItem={({ item }) => (
-        <Pressable style={styles.row} onPress={() => navigation.navigate('Watch', { animeId: item.animeId, episodeNum: item.episodeNum, title: item.title })}>
-          <Image source={{ uri: item.epThumb ?? item.image }} style={styles.thumb} contentFit="cover" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.meta}>Episode {item.episodeNum}{item.epTitle ? ` · ${item.epTitle}` : ''}</Text>
-            <Text style={styles.time}>{new Date(item.watchedAt).toLocaleDateString()}</Text>
-          </View>
-        </Pressable>
-      )}
-    />
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  offlineBanner: { backgroundColor: colors.bgSurface, paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.borderAccent },
-  offlineText: { color: colors.gold, fontSize: 12, textAlign: 'center', fontFamily: fonts.body },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 9, gap: 12 },
-  thumb: { width: 104, height: 60, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  title: { color: colors.textPrimary, fontSize: 13, fontFamily: fonts.bodyMedium },
-  meta: { color: colors.textSecondary, fontSize: 12, marginTop: 3, fontFamily: fonts.body },
-  time: { color: colors.textMuted, fontSize: 11, marginTop: 3, fontFamily: fonts.body },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyTitle: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.displayMedium },
-  emptyText: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 8, fontFamily: fonts.body },
-});
+function localToHistory(i:LocalWatchProgress):HistoryItem{return{animeId:i.anime_id,title:i.anime_title??'Unknown anime',image:i.anime_image??'',episodeNum:i.episode_num,epTitle:i.ep_title,epThumb:i.ep_thumb,watchedAt:i.watched_at??new Date(0).toISOString(),watchTime:i.watch_time,episodeDuration:i.episode_duration}}
+function remoteToLocal(userId:number,i:HistoryItem):LocalWatchProgress{return{user_id:userId,anime_id:i.animeId,anime_title:i.title,anime_image:i.image,episode_num:i.episodeNum,ep_title:i.epTitle,ep_thumb:i.epThumb,watch_time:i.watchTime,episode_duration:i.episodeDuration,watched_at:i.watchedAt}}
+export default function HistoryScreen(){const{user}=useAuth();const navigation=useNavigation<any>();const[items,setItems]=useState<HistoryItem[]>([]);const[refreshing,setRefreshing]=useState(false);const[offline,setOffline]=useState(false);const reload=useCallback(()=>{if(user)setItems(getRecentlyWatched(user.id,50).map(localToHistory))},[user]);useFocusEffect(useCallback(()=>{reload()},[reload]));const refresh=useCallback(async()=>{if(!user)return;setRefreshing(true);const online=await isOnline();setOffline(!online);if(online){try{const r=await getHistory(1);mergeRemoteHistory(user.id,r.data.map(i=>remoteToLocal(user.id,i)));reload()}catch{}}setRefreshing(false)},[user,reload]);return <FlatList style={styles.container} data={items} keyExtractor={i=>`${i.animeId}-${i.episodeNum}-${i.watchedAt}`} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent}/>} ListHeaderComponent={<><View style={styles.heading}><Text style={styles.kicker}>YOUR VAULT</Text><Text style={styles.title}>Watch History</Text><Text style={styles.subtitle}>Pick up where you left off.</Text></View>{offline?<View style={styles.offline}><Ionicons name="cloud-offline-outline" size={14} color={colors.gold}/><Text style={styles.offlineText}>Offline · showing locally saved history</Text></View>:null}</>} ListEmptyComponent={<View style={styles.empty}><Ionicons name="time-outline" size={42} color={colors.textMuted}/><Text style={styles.emptyTitle}>No watch history yet</Text><Text style={styles.emptyText}>Episodes you watch will appear here and remain available offline.</Text></View>} renderItem={({item})=>{const pct=item.episodeDuration>0?Math.min(1,item.watchTime/item.episodeDuration):0;return <Pressable style={styles.card} onPress={()=>navigation.navigate('Watch',{animeId:item.animeId,episodeNum:item.episodeNum,title:item.title})}><View style={styles.thumbWrap}><Image source={{uri:item.epThumb??item.image}} style={styles.thumb} contentFit="cover"/><View style={styles.shade}/><View style={styles.play}><Ionicons name="play" size={12} color="#fff"/></View><Text style={styles.epBadge}>EP {item.episodeNum}</Text></View><View style={styles.cardBody}><View style={{flex:1}}><Text style={styles.anime} numberOfLines={1}>{item.title}</Text><Text style={styles.epTitle} numberOfLines={1}>{item.epTitle||`Episode ${item.episodeNum}`}</Text><Text style={styles.date}>{new Date(item.watchedAt).toLocaleDateString()}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.textMuted}/></View><View style={styles.progress}><View style={[styles.fill,{width:`${pct*100}%`}]}/></View></Pressable>}}/>}
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:colors.bgBase},content:{paddingBottom:30},heading:{paddingHorizontal:15,paddingTop:20,paddingBottom:13},kicker:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:8,letterSpacing:1.4},title:{color:colors.textPrimary,fontFamily:fonts.display,fontSize:20,marginTop:4},subtitle:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10,marginTop:4},offline:{marginHorizontal:15,marginBottom:9,padding:9,borderRadius:7,borderWidth:1,borderColor:colors.borderAccent,backgroundColor:colors.bgSurface,flexDirection:'row',alignItems:'center',gap:7},offlineText:{color:colors.gold,fontFamily:fonts.body,fontSize:9},card:{marginHorizontal:15,marginBottom:11,borderRadius:9,overflow:'hidden',backgroundColor:colors.bgSurface,borderWidth:1,borderColor:colors.border},thumbWrap:{height:145,position:'relative',backgroundColor:colors.bgCard},thumb:{width:'100%',height:'100%'},shade:{...StyleSheet.absoluteFillObject,backgroundColor:'rgba(0,0,0,.22)'},play:{position:'absolute',left:11,top:11,width:38,height:38,borderRadius:19,backgroundColor:'rgba(124,58,237,.92)',alignItems:'center',justifyContent:'center'},epBadge:{position:'absolute',right:9,bottom:9,color:'#fff',backgroundColor:'rgba(0,0,0,.72)',paddingHorizontal:7,paddingVertical:3,borderRadius:4,fontFamily:fonts.bodyBold,fontSize:8},cardBody:{padding:10,flexDirection:'row',alignItems:'center'},anime:{color:colors.textMuted,fontFamily:fonts.bodyMedium,fontSize:9,textTransform:'uppercase'},epTitle:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:12,marginTop:2},date:{color:colors.textMuted,fontFamily:fonts.body,fontSize:8.5,marginTop:4},progress:{height:3,backgroundColor:colors.bgHover},fill:{height:3,backgroundColor:colors.accent},empty:{flex:1,alignItems:'center',justifyContent:'center',paddingHorizontal:35,paddingTop:110},emptyTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:14,marginTop:12},emptyText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10.5,textAlign:'center',lineHeight:16,marginTop:6}});
