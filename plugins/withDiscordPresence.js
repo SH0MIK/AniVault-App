@@ -27,7 +27,7 @@ module.exports = function withDiscordPresence(config) {
   config = withAppBuildGradle(config, cfg => {
     let text = cfg.modResults.contents;
     if (!text.includes('discord_partner_sdk.aar')) {
-      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '${APP_ID}'\n    }\n    externalNativeBuild {\n        cmake {\n            path file('src/main/cpp/CMakeLists.txt')\n            version '3.22.1'\n            arguments '-DANDROID_STL=c++_shared', '-DCMAKE_ANDROID_STL_TYPE=c++_shared'\n        }\n    }`);
+      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '${APP_ID}'\n        externalNativeBuild {\n            cmake {\n                arguments '-DANDROID_STL=c++_shared', '-DCMAKE_ANDROID_STL_TYPE=c++_shared'\n            }\n        }\n    }\n    externalNativeBuild {\n        cmake {\n            path file('src/main/cpp/CMakeLists.txt')\n            version '3.22.1'\n        }\n    }`);
     }
     if (!text.includes("implementation files('libs/discord_partner_sdk.aar')")) {
       text = text.replace(/dependencies\s*\{/, `dependencies {\n    implementation files('libs/discord_partner_sdk.aar')`);
