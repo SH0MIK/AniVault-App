@@ -24,7 +24,7 @@ import { colors } from '../theme';
 export type RootStackParamList = {
   Home: undefined;
   MyList: undefined;
-  Browse: { q?: string } | undefined;
+  Browse: { q?: string; genre?: number } | undefined;
   Chat: undefined;
   Notifications: undefined;
   Profile: undefined;
