@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { getAnimeDetail, getEpisodes, EpisodeItem } from '../api/content';
 import { resolveStream, NativeStream } from '../api/stream';
@@ -60,7 +61,6 @@ export default function WatchScreen() {
 
   const persistProgress = useCallback((time: number, total: number) => {
     if (!user || !anime || time < 1) return;
-    // Avoid writing SQLite/network sync data on every playback callback.
     if (Math.abs(time - lastSaved.current) < 10 && time < total - 5) return;
     lastSaved.current = time;
     saveProgress(user.id, {
