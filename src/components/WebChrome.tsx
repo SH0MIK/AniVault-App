@@ -165,13 +165,25 @@ export function WebSectionHeader({ title, action, onAction }: { title: string; a
 }
 
 export function WebAnimeCard({ title, image, score, type, episodes, status, onPress, width = 138 }: { title: string; image?: string | null; score?: number | null; type?: string; episodes?: number; status?: string | null; onPress?: () => void; width?: number }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { width }, pressed && styles.pressed]} accessibilityRole="button">
+  return <Pressable
+    onPress={onPress}
+    style={({ pressed }) => [styles.card, { width }, pressed && styles.cardPressed]}
+    accessibilityRole="button"
+    accessibilityLabel={title}
+  >
     <View style={[styles.poster, { width, height: width * 1.43 }]}>
       {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={120} /> : <View style={styles.fallback}><Text style={styles.fallbackText}>AV</Text></View>}
-      <View style={styles.cardShade} />
-      {score != null ? <View style={styles.score}><Ionicons name="star" size={10} color={colors.gold} /><Text style={styles.scoreText}>{score.toFixed(1)}</Text></View> : null}
-      {status ? <View style={styles.status}><Text style={styles.statusText}>{status}</Text></View> : null}
-      <View style={styles.add}><Ionicons name="add" size={17} color="#fff" /></View>
+      <View style={styles.posterVignette} pointerEvents="none" />
+      {score != null ? <View style={styles.score}>
+        <Ionicons name="star" size={10} color={colors.gold} />
+        <Text style={styles.scoreText}>{score.toFixed(1)}</Text>
+      </View> : null}
+      {status ? <View style={styles.status}>
+        <Text style={styles.statusText}>{status}</Text>
+      </View> : null}
+      <View style={styles.add}>
+        <Ionicons name="add" size={17} color="#fff" />
+      </View>
     </View>
     <Text style={styles.title} numberOfLines={2}>{title}</Text>
     <Text style={styles.meta} numberOfLines={1}>{[type, episodes ? `${episodes} eps` : ''].filter(Boolean).join(' · ')}</Text>
@@ -250,18 +262,19 @@ const styles = StyleSheet.create({
   sectionAction: { flexDirection: 'row', gap: 4, alignItems: 'center', paddingVertical: 4 },
   actionText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 10 },
   card: { marginRight: 12 },
+  cardPressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
   pressed: { opacity: 0.72 },
-  poster: { overflow: 'hidden', borderRadius: 9, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  poster: { overflow: 'hidden', borderRadius: 10, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fallbackText: { color: colors.accent, fontFamily: fonts.display, fontSize: 22 },
-  score: { position: 'absolute', top: 7, left: 7, backgroundColor: 'rgba(0,0,0,0.78)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, flexDirection: 'row', gap: 3 },
-  scoreText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 9 },
-  status: { position: 'absolute', bottom: 7, left: 7, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 },
+  posterVignette: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.07)' },
+  score: { position: 'absolute', top: 8, left: 8, height: 23, backgroundColor: 'rgba(7,8,11,0.86)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', paddingHorizontal: 7, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  scoreText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 9.5 },
+  status: { position: 'absolute', bottom: 8, left: 8, maxWidth: '68%', backgroundColor: 'rgba(124,58,237,0.92)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
   statusText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 8, textTransform: 'uppercase' },
-  cardShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 48, backgroundColor: 'rgba(0,0,0,0.20)' },
-  add: { position: 'absolute', right: 7, bottom: 7, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  title: { color: colors.textPrimary, fontFamily: fonts.bodySemibold, fontSize: 11.5, lineHeight: 15, marginTop: 7 },
-  meta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 9.5, marginTop: 2 },
+  add: { position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  title: { color: colors.textPrimary, fontFamily: fonts.bodySemibold, fontSize: 11.5, lineHeight: 15, marginTop: 8 },
+  meta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 9.5, marginTop: 3 },
   footer: { marginTop: 38, padding: 22, paddingBottom: 30, backgroundColor: colors.bgSurface, borderTopWidth: 1, borderTopColor: colors.border },
   footerLogo: { width: 115, height: 31 },
   footerTag: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 11, lineHeight: 16, marginTop: 8 },
