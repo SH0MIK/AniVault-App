@@ -43,7 +43,7 @@ export function saveProgress(userId: number, fields: Omit<LocalWatchProgress, 'u
     [fields.anime_id, userId, fields.anime_title, fields.anime_image, fields.episode_num,
       fields.ep_title, fields.ep_thumb, Math.round(fields.watch_time), Math.round(fields.episode_duration), now]
   );
-  enqueue('history', {
+  enqueue('watch_history', {
     anime_id: String(fields.anime_id),
     anime_title: fields.anime_title ?? '', anime_image: fields.anime_image ?? '',
     episode_num: String(fields.episode_num), ep_title: fields.ep_title ?? '', ep_thumb: fields.ep_thumb ?? '',
