@@ -11,7 +11,7 @@ const days = [['monday','Mon'],['tuesday','Tue'],['wednesday','Wed'],['thursday'
 
 export default function ScheduleScreen() {
   const navigation = useNavigation<any>();
-  const today = useMemo(() => ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date().getUTCDay()], []);
+  const today = useMemo(() => ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date().getDay()], []);
   const [day, setDay] = useState(today);
   const [items, setItems] = useState<ScheduleCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export default function ScheduleScreen() {
           </View>
           <View style={styles.heroIcon}><Ionicons name="calendar-outline" size={23} color={colors.accent} /></View>
         </View>
-        <FlatList horizontal data={days} keyExtractor={x => x[0]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days} renderItem={({ item }) => <Pressable onPress={() => setDay(item[0])} style={[styles.day, day === item[0] && styles.dayActive]}><Text style={[styles.dayText, day === item[0] && styles.dayTextActive]}>{item[1]}</Text>{today === item[0] && <View style={styles.dot} />}</Pressable>} />
+        <FlatList horizontal data={days} keyExtractor={x => x[0]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days} renderItem={({ item }) => <Pressable onPress={() => setDay(item[0])} style={({ pressed }) => [styles.day, day === item[0] && styles.dayActive, pressed && styles.dayPressed]}><Text style={[styles.dayText, day === item[0] && styles.dayTextActive]}>{item[1]}</Text>{today === item[0] && <View style={styles.dot} />}</Pressable>} />
         <WebSectionHeader title="Airing Schedule" />
         {error && <View style={styles.error}><Ionicons name="cloud-offline-outline" size={17} color={colors.accent} /><Text style={styles.errorText}>{error}</Text></View>}
       </View>}
@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
   days:{paddingHorizontal:14,paddingVertical:10,gap:7,borderBottomWidth:1,borderBottomColor:colors.border},
   day:{minWidth:52,alignItems:'center',paddingVertical:7,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,marginRight:2},
   dayActive:{backgroundColor:colors.accent,borderColor:colors.accent},
+  dayPressed:{opacity:.78},
   dayText:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:10.5},
   dayTextActive:{color:'#fff'},
   dot:{width:4,height:4,borderRadius:2,backgroundColor:colors.gold,marginTop:3},
