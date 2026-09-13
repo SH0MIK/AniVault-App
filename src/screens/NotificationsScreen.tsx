@@ -16,10 +16,12 @@ export default function NotificationsScreen() {
     try {
       const res = await getNotifications();
       setItems(res.notifications ?? []);
-    } catch (err: any) {
-      if (!items.length) setItems([]);
+      setOffline(false);
+    } catch {
+      // getNotifications already falls back to the local cache when available.
+      // Keep the current list if both network and cache are unavailable.
     }
-  }, [items.length]);
+  }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -32,7 +34,7 @@ export default function NotificationsScreen() {
   }, [load]);
 
   const onPressItem = async (item: NotificationItem) => {
-    if (!item.is_read) {
+    if (!item.is_read && !offline) {
       setItems((prev) => prev.map((n) => n.id === item.id ? { ...n, is_read: true } : n));
       markRead(item.id).catch(() => {});
     }
@@ -42,12 +44,12 @@ export default function NotificationsScreen() {
 
   const markEverythingRead = () => {
     setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    markAllRead().catch(() => {});
+    if (!offline) markAllRead().catch(() => {});
   };
 
   const onDelete = (id: number) => {
     setItems((prev) => prev.filter((n) => n.id !== id));
-    deleteNotification(id).catch(() => {});
+    if (!offline) deleteNotification(id).catch(() => {});
   };
 
   const unreadCount = items.filter((n) => !n.is_read).length;
