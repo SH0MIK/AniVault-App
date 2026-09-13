@@ -27,7 +27,7 @@ module.exports = function withDiscordPresence(config) {
   config = withAppBuildGradle(config, cfg => {
     let text = cfg.modResults.contents;
     if (!text.includes('discord_partner_sdk.aar')) {
-      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '"${APP_ID}"'\n    }\n    externalNativeBuild {\n        cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' }\n    }`);
+      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '${APP_ID}'\n    }\n    externalNativeBuild {\n        cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' }\n    }`);
     }
     if (!text.includes("implementation files('libs/discord_partner_sdk.aar')")) {
       text = text.replace(/dependencies\s*\{/, `dependencies {\n    implementation files('libs/discord_partner_sdk.aar')`);
@@ -64,8 +64,6 @@ module.exports = function withDiscordPresence(config) {
   });
 
   config.modRequest = config.modRequest || {};
-  // Files are copied by the Android app-build mod because config plugins run
-  // before the native project exists in a CNG/EAS build.
   const { withDangerousMod } = require('@expo/config-plugins');
   config = withDangerousMod(config, ['android', async cfg => {
     const root = cfg.modRequest.platformProjectRoot;
