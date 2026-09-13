@@ -20,7 +20,6 @@ import CharacterScreen from '../screens/CharacterScreen';
 import SeasonalScreen from '../screens/SeasonalScreen';
 import TopAnimeScreen from '../screens/TopAnimeScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
-import { WebHeader } from '../components/WebChrome';
 import { colors } from '../theme';
 
 export type RootStackParamList = {
@@ -51,15 +50,7 @@ const navTheme = { dark: true, colors: { primary: colors.accent, background: col
 export default function RootNavigator() {
   return (
     <NavigationContainer theme={navTheme as any}>
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={({ navigation, route }) => ({
-          header: () => <WebHeader navigation={navigation} routeName={route.name} />,
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.bgBase },
-          animation: 'fade',
-        })}
-      >
+      <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bgBase }, animation: 'fade' }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="MyList" component={MyListScreen} />
         <Stack.Screen name="Browse" component={BrowseScreen} />
@@ -67,7 +58,7 @@ export default function RootNavigator() {
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="AnimeDetail" component={AnimeDetailScreen} />
-        <Stack.Screen name="Watch" component={WatchScreen} options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="Watch" component={WatchScreen} options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
         <Stack.Screen name="UserProfile" component={UserProfileScreen} />
         <Stack.Screen name="FollowList" component={FollowListScreen} />
