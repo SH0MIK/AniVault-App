@@ -1,14 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, FlatList } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getMyProfile, ProfileBundle } from '../api/profile';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, fonts } from '../theme';
 
 const STAT_LABELS: [keyof ProfileBundle['stats'], string][] = [
-  ['watching', 'Watching'], ['completed', 'Completed'], ['plan_to_watch', 'Plan to Watch'],
-  ['on_hold', 'On Hold'], ['dropped', 'Dropped'],
+  ['watching', 'Watching'], ['completed', 'Completed'], ['plan_to_watch', 'Plan to Watch'], ['on_hold', 'On Hold'], ['dropped', 'Dropped'],
 ];
 
 export default function ProfileScreen() {
@@ -17,142 +17,22 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<ProfileBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getMyProfile();
-      setProfile(res);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load profile.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  const load = useCallback(async () => { setLoading(true); setError(null); try { setProfile(await getMyProfile()); } catch (e: any) { setError(e?.message ?? 'Failed to load profile.'); } finally { setLoading(false); } }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  if (loading && !profile) {
-    return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
-  }
-  if (error || !profile) {
-    return <View style={styles.center}><Text style={styles.error}>{error ?? 'Something went wrong.'}</Text></View>;
-  }
-
+  if (loading && !profile) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+  if (error || !profile) return <View style={styles.center}><Ionicons name="person-circle-outline" size={48} color={colors.textMuted}/><Text style={styles.error}>{error ?? 'Something went wrong.'}</Text></View>;
   const { user, stats, badges, favorites, followerCount, followingCount } = profile;
-
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Image source={{ uri: user.avatarUrl ?? undefined }} style={styles.avatar} contentFit="cover" />
-        <Text style={styles.username}>{user.username}</Text>
-        {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
-        <View style={styles.followRow}>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userId: user.id, type: 'followers', username: user.username })}>
-            <Text style={styles.followCount}>{followerCount} <Text style={styles.followLabel}>Followers</Text></Text>
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('FollowList', { userId: user.id, type: 'following', username: user.username })}>
-            <Text style={styles.followCount}>{followingCount} <Text style={styles.followLabel}>Following</Text></Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {badges.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Badges</Text>
-          <View style={styles.badgeRow}>
-            {badges.map((b) => (
-              <View key={b.id} style={[styles.badgeChip, { borderColor: b.color }]}>
-                {b.imageUrl ? <Image source={{ uri: b.imageUrl }} style={styles.badgeImg} /> : <Text style={{ fontSize: 14 }}>{b.iconText}</Text>}
-                <Text style={styles.badgeName}>{b.name}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Stats</Text>
-        <View style={styles.statsGrid}>
-          {STAT_LABELS.map(([key, label]) => (
-            <View key={key} style={styles.statBox}>
-              <Text style={styles.statValue}>{stats[key]}</Text>
-              <Text style={styles.statLabel}>{label}</Text>
-            </View>
-          ))}
-          <View style={styles.statBox}><Text style={styles.statValue}>{stats.total_episodes}</Text><Text style={styles.statLabel}>Episodes</Text></View>
-          <View style={styles.statBox}><Text style={styles.statValue}>{stats.avg_score || '—'}</Text><Text style={styles.statLabel}>Avg Score</Text></View>
-        </View>
-      </View>
-
-      {favorites.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Favorites</Text>
-          <FlatList
-            horizontal
-            data={favorites}
-            keyExtractor={(f) => String(f.animeId)}
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <Pressable style={styles.favCard} onPress={() => navigation.navigate('AnimeDetail', { id: item.animeId, title: item.title })}>
-                <Image source={{ uri: item.image }} style={styles.favPoster} contentFit="cover" />
-              </Pressable>
-            )}
-          />
-        </View>
-      )}
-
-      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('Downloads')}>
-        <Text style={styles.actionIcon}>↓</Text>
-        <View style={styles.actionCopy}><Text style={styles.actionTitle}>Offline Downloads</Text><Text style={styles.actionSubtitle}>Watch downloaded episodes without internet</Text></View>
-        <Text style={styles.chevron}>›</Text>
-      </Pressable>
-      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('History')}>
-        <Text style={styles.actionIcon}>◷</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Watch History</Text><Text style={styles.actionSubtitle}>Your recently watched episodes</Text></View><Text style={styles.chevron}>›</Text>
-      </Pressable>
-      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('Announcements')}>
-        <Text style={styles.actionIcon}>!</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Announcements</Text></View><Text style={styles.chevron}>›</Text>
-      </Pressable>
-      <Pressable style={styles.actionBtn} onPress={() => navigation.navigate('AccountSettings')}>
-        <Text style={styles.actionIcon}>⚙</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Account Settings</Text></View><Text style={styles.chevron}>›</Text>
-      </Pressable>
-      <Pressable style={[styles.actionBtn, styles.logoutBtn]} onPress={logout}>
-        <Text style={styles.actionIcon}>↪</Text><View style={styles.actionCopy}><Text style={styles.actionTitle}>Log out</Text></View>
-      </Pressable>
-      <View style={{ height: 28 }} />
-    </ScrollView>
-  );
+  return <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <View style={styles.cover}><View style={styles.coverGlow}/><View style={styles.profileHead}><Image source={{ uri: user.avatarUrl ?? undefined }} style={styles.avatar} contentFit="cover"/><View style={styles.identity}><Text style={styles.kicker}>YOUR VAULT</Text><Text style={styles.username}>{user.username}</Text>{user.bio ? <Text style={styles.bio} numberOfLines={3}>{user.bio}</Text> : null}<View style={styles.followRow}><Pressable onPress={() => navigation.navigate('FollowList',{userId:user.id,type:'followers',username:user.username})}><Text style={styles.followValue}>{followerCount}<Text style={styles.followLabel}> Followers</Text></Text></Pressable><Pressable onPress={() => navigation.navigate('FollowList',{userId:user.id,type:'following',username:user.username})}><Text style={styles.followValue}>{followingCount}<Text style={styles.followLabel}> Following</Text></Text></Pressable></View></View></View></View>
+    {badges.length > 0 ? <View style={styles.section}><SectionTitle title="Badges"/><View style={styles.badgeRow}>{badges.map(b => <View key={b.id} style={[styles.badge,{borderColor:b.color}]}>{b.imageUrl ? <Image source={{uri:b.imageUrl}} style={styles.badgeImg}/> : <Text style={styles.badgeIcon}>{b.iconText}</Text>}<Text style={styles.badgeText}>{b.name}</Text></View>)}</View></View> : null}
+    <View style={styles.section}><SectionTitle title="Library stats"/><View style={styles.statsGrid}>{STAT_LABELS.map(([key,label])=><Stat key={key} value={stats[key]} label={label}/>)}<Stat value={stats.total_episodes} label="Episodes"/><Stat value={stats.avg_score || '—'} label="Avg score"/></View></View>
+    {favorites.length > 0 ? <View style={styles.section}><SectionTitle title="Favorites" action="View all"/><FlatList horizontal data={favorites} keyExtractor={f=>String(f.animeId)} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favRow} renderItem={({item})=><Pressable style={styles.favCard} onPress={()=>navigation.navigate('AnimeDetail',{id:item.animeId,title:item.title})}><Image source={{uri:item.image}} style={styles.favPoster} contentFit="cover"/><Text style={styles.favTitle} numberOfLines={2}>{item.title}</Text></Pressable>}/></View> : null}
+    <View style={styles.section}><SectionTitle title="Quick access"/><Action icon="time-outline" title="Watch History" subtitle="Recently watched episodes" onPress={()=>navigation.navigate('History')}/><Action icon="megaphone-outline" title="Announcements" subtitle="AniVault updates and news" onPress={()=>navigation.navigate('Announcements')}/><Action icon="settings-outline" title="Account Settings" subtitle="Profile and account preferences" onPress={()=>navigation.navigate('AccountSettings')}/><Pressable style={styles.logout} onPress={logout}><Ionicons name="log-out-outline" size={18} color={colors.textMuted}/><Text style={styles.logoutText}>Log out</Text></Pressable></View>
+    <Text style={styles.footer}>AniVault · Free & Ad-free anime streaming platform</Text>
+  </ScrollView>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
-  error: { color: colors.accent, fontFamily: fonts.body },
-  header: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  avatar: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.bgCard, borderWidth: 2, borderColor: colors.accent },
-  username: { color: colors.textPrimary, fontSize: 20, fontFamily: fonts.display, marginTop: 12 },
-  bio: { color: colors.textSecondary, fontSize: 13, marginTop: 6, textAlign: 'center', fontFamily: fonts.body },
-  followRow: { flexDirection: 'row', gap: 24, marginTop: 14 },
-  followCount: { color: colors.textPrimary, fontSize: 15, fontFamily: fonts.bodySemibold },
-  followLabel: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
-  section: { paddingHorizontal: 16, marginTop: 8, marginBottom: 16 },
-  sectionTitle: { color: colors.textPrimary, fontSize: 15, fontFamily: fonts.displayMedium, marginBottom: 10 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  badgeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bgCard, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 6 },
-  badgeImg: { width: 16, height: 16 },
-  badgeName: { color: colors.textSecondary, fontSize: 11, fontFamily: fonts.body },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statBox: { width: '30%', backgroundColor: colors.bgCard, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' },
-  statValue: { color: colors.accent, fontSize: 20, fontFamily: fonts.display },
-  statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 4, fontFamily: fonts.body },
-  favCard: { marginRight: 10 },
-  favPoster: { width: 90, height: 130, borderRadius: radius.sm, backgroundColor: colors.bgCard },
-  actionBtn: { marginHorizontal: 16, marginTop: 8, minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bgCard },
-  actionIcon: { width: 28, color: colors.accent, fontSize: 21, textAlign: 'center', fontFamily: fonts.bodyBold },
-  actionCopy: { flex: 1, marginLeft: 10 },
-  actionTitle: { color: colors.textPrimary, fontSize: 13, fontFamily: fonts.bodySemibold },
-  actionSubtitle: { color: colors.textMuted, fontSize: 10, marginTop: 3, fontFamily: fonts.body },
-  chevron: { color: colors.textMuted, fontSize: 24, marginLeft: 8 },
-  logoutBtn: { marginTop: 12, marginBottom: 4 },
-});
+function SectionTitle({title,action}:{title:string;action?:string}){return <View style={styles.sectionTitleRow}><Text style={styles.sectionTitle}>{title}</Text>{action?<Text style={styles.sectionAction}>{action}</Text>:null}</View>}
+function Stat({value,label}:{value:any;label:string}){return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>}
+function Action({icon,title,subtitle,onPress}:{icon:any;title:string;subtitle:string;onPress:()=>void}){return <Pressable style={styles.action} onPress={onPress}><View style={styles.actionIcon}><Ionicons name={icon} size={18} color={colors.accent}/></View><View style={styles.actionCopy}><Text style={styles.actionTitle}>{title}</Text><Text style={styles.actionSubtitle}>{subtitle}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.textMuted}/></Pressable>}
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:colors.bgBase},content:{paddingBottom:28},center:{flex:1,backgroundColor:colors.bgBase,alignItems:'center',justifyContent:'center',padding:30},error:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:12,marginTop:10,textAlign:'center'},cover:{minHeight:225,backgroundColor:colors.bgSurface,borderBottomWidth:1,borderBottomColor:colors.border,justifyContent:'flex-end',padding:16,overflow:'hidden'},coverGlow:{position:'absolute',left:-80,bottom:-100,width:300,height:250,borderRadius:150,backgroundColor:'rgba(124,58,237,.16)'},profileHead:{flexDirection:'row',alignItems:'center',gap:14},avatar:{width:92,height:92,borderRadius:46,borderWidth:2,borderColor:colors.accent,backgroundColor:colors.bgCard},identity:{flex:1},kicker:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:8,letterSpacing:1.4},username:{color:colors.textPrimary,fontFamily:fonts.display,fontSize:19,marginTop:4},bio:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:11,lineHeight:16,marginTop:5},followRow:{flexDirection:'row',gap:20,marginTop:10},followValue:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:11},followLabel:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10},section:{paddingHorizontal:15,marginTop:18},sectionTitleRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10},sectionTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:12,letterSpacing:.4},sectionAction:{color:colors.accent,fontFamily:fonts.bodyMedium,fontSize:10},badgeRow:{flexDirection:'row',flexWrap:'wrap',gap:7},badge:{flexDirection:'row',alignItems:'center',gap:5,paddingHorizontal:8,paddingVertical:6,borderRadius:7,borderWidth:1,backgroundColor:colors.bgSurface},badgeImg:{width:17,height:17},badgeIcon:{fontSize:13,color:colors.textPrimary},badgeText:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:9},statsGrid:{flexDirection:'row',flexWrap:'wrap',gap:7},stat:{width:'31.8%',minHeight:68,borderRadius:8,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,alignItems:'center',justifyContent:'center'},statValue:{color:colors.accent,fontFamily:fonts.display,fontSize:17},statLabel:{color:colors.textMuted,fontFamily:fonts.body,fontSize:8.5,marginTop:4},favRow:{paddingRight:15},favCard:{width:92,marginRight:10},favPoster:{width:92,height:130,borderRadius:7,backgroundColor:colors.bgCard},favTitle:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:9,marginTop:5,lineHeight:12},action:{minHeight:62,marginBottom:7,paddingHorizontal:10,borderRadius:8,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,flexDirection:'row',alignItems:'center'},actionIcon:{width:38,height:38,borderRadius:7,backgroundColor:'rgba(124,58,237,.10)',alignItems:'center',justifyContent:'center'},actionCopy:{flex:1,marginLeft:10},actionTitle:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:12},actionSubtitle:{color:colors.textMuted,fontFamily:fonts.body,fontSize:9.5,marginTop:3},logout:{height:48,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7},logoutText:{color:colors.textMuted,fontFamily:fonts.bodyMedium,fontSize:10},footer:{color:colors.textMuted,fontFamily:fonts.body,fontSize:8,textAlign:'center',marginTop:12}}
+);
