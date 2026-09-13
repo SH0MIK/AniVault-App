@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { colors, fonts, radius } from '../theme';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
   const [seasonal, setSeasonal] = useState<WebHomeCard[]>([]);
   const [top, setTop] = useState<WebHomeCard[]>([]);
   const [upcoming, setUpcoming] = useState<WebHomeCard[]>([]);
@@ -50,6 +51,7 @@ export default function HomeScreen() {
   }, [heroItems.length]);
 
   const hero = heroItems[heroIndex];
+  const heroHeight = Math.max(430, Math.min(560, width * 1.18));
 
   return (
     <View style={styles.root}>
@@ -58,13 +60,13 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
       >
-        {!loading && hero ? <Hero item={hero} index={heroIndex} total={heroItems.length} onDetails={() => navigation.navigate('AnimeDetail', { id: hero.id, title: hero.title })} onIndex={setHeroIndex} /> : loading ? <View style={styles.heroSkeleton}><Text style={styles.loadingText}>LOADING ANIVAULT...</Text></View> : <View style={styles.heroSkeleton}><Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} /><Text style={styles.offlineTitle}>ANIVAULT OFFLINE</Text><Text style={styles.offlineText}>{error || 'Connect once to load the homepage.'}</Text><Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable></View>}
+        {!loading && hero ? <Hero item={hero} index={heroIndex} total={heroItems.length} height={heroHeight} onDetails={() => navigation.navigate('AnimeDetail', { id: hero.id, title: hero.title })} onIndex={setHeroIndex} /> : loading ? <View style={[styles.heroSkeleton, { height: heroHeight }]}><Text style={styles.loadingText}>LOADING ANIVAULT...</Text></View> : <View style={[styles.heroSkeleton, { height: heroHeight }]}><Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} /><Text style={styles.offlineTitle}>ANIVAULT OFFLINE</Text><Text style={styles.offlineText}>{error || 'Connect once to load the homepage.'}</Text><Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable></View>}
 
-        {!loading && genres.length > 0 ? <FlatList horizontal data={genres} keyExtractor={(item) => String(item.mal_id)} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreBar} renderItem={({ item }) => <Pressable onPress={() => navigation.navigate('Browse', { genre: item.mal_id })} style={styles.genrePill}><Text style={styles.genreText}>{item.name}</Text></Pressable>} /> : null}
+        {!loading && genres.length > 0 ? <FlatList horizontal data={genres} keyExtractor={(item) => String(item.mal_id)} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreBar} renderItem={({ item }) => <Pressable onPress={() => navigation.navigate('Browse', { genre: item.mal_id })} style={({ pressed }) => [styles.genrePill, pressed && styles.genrePressed]}><Text style={styles.genreText}>{item.name}</Text></Pressable>} /> : null}
         {!loading && continueWatching.length > 0 ? <ContinueWatching data={continueWatching} onPress={(item) => navigation.navigate('Watch', { animeId: item.animeId, episodeNum: item.episodeNum, title: item.title })} onHistory={() => navigation.navigate('History')} /> : null}
         {!loading && watchNow.length > 0 ? <PosterSection title="Watch Now" action="View All" onAction={() => navigation.navigate('WatchNow')} data={watchNow} navigation={navigation} /> : null}
-        {!loading ? <PosterSection title="Trending Now" action="View All" onAction={() => navigation.navigate('Seasonal')} data={seasonal} navigation={navigation} /> : null}
-        {!loading ? <PosterSection title="Most Popular" action="View Full Rankings" onAction={() => navigation.navigate('TopAnime')} data={top} navigation={navigation} /> : null}
+        {!loading && seasonal.length > 0 ? <PosterSection title="Trending Now" action="View All" onAction={() => navigation.navigate('Seasonal')} data={seasonal} navigation={navigation} /> : null}
+        {!loading && top.length > 0 ? <PosterSection title="Most Popular" action="View Full Rankings" onAction={() => navigation.navigate('TopAnime')} data={top} navigation={navigation} /> : null}
         {!loading && upcoming.length > 0 ? <PosterSection title="Coming Soon" data={upcoming} navigation={navigation} /> : null}
         {!loading && top.length > 0 ? <TopTen data={top} navigation={navigation} /> : null}
         <WebFooter />
@@ -74,8 +76,8 @@ export default function HomeScreen() {
   );
 }
 
-function Hero({ item, index, total, onDetails, onIndex }: { item: HomeHeroItem; index: number; total: number; onDetails: () => void; onIndex: (index: number) => void }) {
-  return <View style={styles.hero}>
+function Hero({ item, index, total, height, onDetails, onIndex }: { item: HomeHeroItem; index: number; total: number; height: number; onDetails: () => void; onIndex: (index: number) => void }) {
+  return <View style={[styles.hero, { height }]}>
     <Image source={{ uri: item.banner || item.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
     <View style={styles.heroDim} /><View style={styles.heroBottom} />
     <View style={styles.heroContent}>
@@ -83,20 +85,21 @@ function Hero({ item, index, total, onDetails, onIndex }: { item: HomeHeroItem; 
       {item.logo ? <Image source={{ uri: item.logo }} style={styles.heroLogo} contentFit="contain" /> : <Text style={styles.heroTitle} numberOfLines={2}>{item.title}</Text>}
       {item.logo ? <Text style={styles.heroFallbackTitle} numberOfLines={1}>{item.title}</Text> : null}
       {item.synopsis ? <Text style={styles.heroDescription} numberOfLines={3}>{item.synopsis}</Text> : null}
-      <View style={styles.heroGenres}>{item.genres.map((g) => <View key={g} style={styles.heroGenre}><Text style={styles.heroGenreText}>{g}</Text></View>)}</View>
+      <View style={styles.heroGenres}>{item.genres.slice(0, 4).map((g) => <View key={g} style={styles.heroGenre}><Text style={styles.heroGenreText}>{g}</Text></View>)}</View>
       <View style={styles.heroStats}>{item.score != null ? <View style={styles.heroStat}><Ionicons name="star" size={13} color={colors.gold} /><Text style={styles.heroStatText}>{item.score.toFixed(1)}</Text></View> : null}{item.episodes ? <Text style={styles.heroMeta}>▣ {item.episodes} eps</Text> : null}{item.type ? <Text style={styles.heroMeta}>▣ {item.type}</Text> : null}</View>
-      <View style={styles.heroButtons}><Pressable style={styles.heroPrimary} onPress={onDetails}><Ionicons name="play" size={14} color="#fff" /><Text style={styles.heroPrimaryText}>VIEW DETAILS</Text></Pressable><Pressable style={styles.heroGhost} onPress={onDetails}><Ionicons name="add" size={16} color={colors.textPrimary} /><Text style={styles.heroGhostText}>ADD TO LIST</Text></Pressable></View>
+      <View style={styles.heroButtons}><Pressable style={({ pressed }) => [styles.heroPrimary, pressed && styles.buttonPressed]} onPress={onDetails}><Ionicons name="play" size={14} color="#fff" /><Text style={styles.heroPrimaryText}>VIEW DETAILS</Text></Pressable><Pressable style={({ pressed }) => [styles.heroGhost, pressed && styles.buttonPressed]} onPress={onDetails}><Ionicons name="add" size={16} color={colors.textPrimary} /><Text style={styles.heroGhostText}>ADD TO LIST</Text></Pressable></View>
     </View>
     {total > 1 ? <View style={styles.dots}>{Array.from({ length: total }).map((_, i) => <Pressable key={i} onPress={() => onIndex(i)} style={[styles.dot, i === index && styles.dotActive]} />)}</View> : null}
   </View>;
 }
 
 function ContinueWatching({ data, onPress, onHistory }: { data: any[]; onPress: (item: any) => void; onHistory: () => void }) {
-  return <View><WebSectionHeader title="Continue Watching" action="View Full History" onAction={onHistory} /><View style={styles.continueList}>{data.slice(0, 8).map((item) => {
+  const visible = data.slice(0, 3);
+  return <View><WebSectionHeader title="Continue Watching" action="View Full History" onAction={onHistory} /><View style={styles.continueList}>{visible.map((item) => {
     const pct = item.episodeDuration > 0 ? Math.min(1, item.watchTime / item.episodeDuration) : 0;
     const left = item.episodeDuration > item.watchTime ? Math.max(0, Math.round((item.episodeDuration - item.watchTime) / 60)) : 0;
-    return <Pressable key={`${item.animeId}-${item.episodeNum}`} onPress={() => onPress(item)} style={styles.continueCard}><View style={styles.continueThumb}><Image source={{ uri: item.epThumb || item.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" /><View style={styles.continueShade} />{left > 0 ? <Text style={styles.timeLeft}>{left >= 60 ? `${Math.floor(left / 60)}h ${left % 60}m left` : `${left}m left`}</Text> : null}<View style={styles.episodeBadge}><Text style={styles.episodeBadgeText}>Ep {item.episodeNum}</Text></View><View style={styles.playCircle}><Ionicons name="play" size={17} color="#fff" /></View>{pct > 0 ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct * 100}%` }]} /></View> : null}</View><View style={styles.continueInfo}><Text style={styles.continueAnime} numberOfLines={1}>{item.title}</Text><Text style={styles.continueTitle} numberOfLines={1}>E{item.episodeNum} – {item.epTitle || `Episode ${item.episodeNum}`}</Text></View></Pressable>;
-  })}</View></View>;
+    return <Pressable key={`${item.animeId}-${item.episodeNum}`} onPress={() => onPress(item)} style={({ pressed }) => [styles.continueCard, pressed && styles.continuePressed]}><View style={styles.continueThumb}><Image source={{ uri: item.epThumb || item.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" /><View style={styles.continueShade} />{left > 0 ? <Text style={styles.timeLeft}>{left >= 60 ? `${Math.floor(left / 60)}h ${left % 60}m left` : `${left}m left`}</Text> : null}<View style={styles.episodeBadge}><Text style={styles.episodeBadgeText}>Ep {item.episodeNum}</Text></View><View style={styles.playCircle}><Ionicons name="play" size={17} color="#fff" /></View>{pct > 0 ? <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct * 100}%` }]} /></View> : null}</View><View style={styles.continueInfo}><Text style={styles.continueAnime} numberOfLines={1}>{item.title}</Text><Text style={styles.continueTitle} numberOfLines={2}>E{item.episodeNum} – {item.epTitle || `Episode ${item.episodeNum}`}</Text></View></Pressable>;
+  })}</View>{data.length > 3 ? <Pressable onPress={onHistory} style={({ pressed }) => [styles.showMore, pressed && styles.showMorePressed]}><View style={styles.showMoreLine} /><Text style={styles.showMoreText}>SHOW MORE</Text><Ionicons name="chevron-down" size={13} color={colors.textMuted} /><View style={styles.showMoreLine} /></Pressable> : null}</View>;
 }
 
 function PosterSection({ title, action, onAction, data, navigation }: { title: string; action?: string; onAction?: () => void; data: WebHomeCard[]; navigation: any }) {
@@ -104,14 +107,14 @@ function PosterSection({ title, action, onAction, data, navigation }: { title: s
 }
 
 function TopTen({ data, navigation }: { data: WebHomeCard[]; navigation: any }) {
-  return <View><WebSectionHeader title="Top 10 Ranked" action="View Full Rankings" onAction={() => navigation.navigate('TopAnime')} /><View style={styles.topList}>{data.slice(0, 10).map((item, index) => <Pressable key={item.id} onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })} style={styles.topItem}><Text style={styles.rank}>#{index + 1}</Text><Image source={{ uri: item.image }} style={styles.topThumb} contentFit="cover" /><View style={styles.topInfo}><Text style={styles.topTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.topMeta}>{item.score != null ? `★ ${item.score.toFixed(1)}` : ''}{item.type ? ` · ${item.type}` : ''}</Text></View><Ionicons name="chevron-forward" size={16} color={colors.textMuted} /></Pressable>)}</View></View>;
+  return <View><WebSectionHeader title="Top 10 Ranked" action="View Full Rankings" onAction={() => navigation.navigate('TopAnime')} /><View style={styles.topList}>{data.slice(0, 10).map((item, index) => <Pressable key={item.id} onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })} style={({ pressed }) => [styles.topItem, pressed && styles.topPressed]}><Text style={styles.rank}>#{index + 1}</Text><Image source={{ uri: item.image }} style={styles.topThumb} contentFit="cover" /><View style={styles.topInfo}><Text style={styles.topTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.topMeta}>{item.score != null ? `★ ${item.score.toFixed(1)}` : ''}{item.type ? ` · ${item.type}` : ''}</Text></View><Ionicons name="chevron-forward" size={16} color={colors.textMuted} /></Pressable>)}</View></View>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgBase },
-  hero: { height: 500, overflow: 'hidden', backgroundColor: colors.bgCard },
+  hero: { overflow: 'hidden', backgroundColor: colors.bgCard },
   heroDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.18)' },
-  heroBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 310, backgroundColor: 'rgba(10,11,14,.94)' },
+  heroBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '62%', backgroundColor: 'rgba(10,11,14,.94)' },
   heroContent: { position: 'absolute', left: 18, right: 18, bottom: 63 },
   heroEyebrow: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 9, letterSpacing: 1.8, marginBottom: 8 },
   heroLogo: { width: 245, height: 68, alignSelf: 'flex-start', marginBottom: 3 },
@@ -130,10 +133,11 @@ const styles = StyleSheet.create({
   heroPrimaryText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: .7 },
   heroGhost: { minHeight: 39, paddingHorizontal: 13, borderRadius: radius.sm, backgroundColor: 'rgba(255,255,255,.06)', borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
   heroGhostText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: .7 },
+  buttonPressed: { opacity: .78, transform: [{ scale: .98 }] },
   dots: { position: 'absolute', bottom: 22, left: 18, flexDirection: 'row', gap: 6 },
   dot: { width: 18, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,.18)' },
   dotActive: { backgroundColor: colors.accent },
-  heroSkeleton: { height: 500, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgSurface, padding: 24 },
+  heroSkeleton: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgSurface, padding: 24 },
   loadingText: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 10, letterSpacing: 1.4 },
   offlineTitle: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 12, marginTop: 10 },
   offlineText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 11, textAlign: 'center', marginTop: 7 },
@@ -141,10 +145,12 @@ const styles = StyleSheet.create({
   retryText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: .8 },
   genreBar: { paddingHorizontal: 16, gap: 7, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   genrePill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.bgSurface, borderWidth: 1, borderColor: colors.border },
+  genrePressed: { backgroundColor: colors.bgHover, borderColor: colors.borderAccent },
   genreText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 9 },
   continueList: { paddingHorizontal: 16 },
   continueCard: { marginBottom: 16 },
-  continueThumb: { width: '100%', aspectRatio: 16 / 8.8, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  continuePressed: { opacity: .86 },
+  continueThumb: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
   continueShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.18)' },
   episodeBadge: { position: 'absolute', right: 8, bottom: 9, backgroundColor: 'rgba(0,0,0,.76)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 },
   episodeBadgeText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 8 },
@@ -155,9 +161,14 @@ const styles = StyleSheet.create({
   continueInfo: { paddingHorizontal: 2, paddingTop: 7 },
   continueAnime: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: .8 },
   continueTitle: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 13, marginTop: 2 },
+  showMore: { flexDirection: 'row', alignItems: 'center', gap: 9, marginHorizontal: 16, marginTop: 3, marginBottom: 1 },
+  showMoreLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  showMoreText: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1.1 },
+  showMorePressed: { opacity: .65 },
   posterRow: { paddingHorizontal: 16 },
   topList: { paddingHorizontal: 16 },
   topItem: { minHeight: 72, marginBottom: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: radius.md, backgroundColor: colors.bgSurface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  topPressed: { backgroundColor: colors.bgHover, borderColor: colors.borderAccent },
   rank: { width: 30, color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 11, textAlign: 'center' },
   topThumb: { width: 42, height: 58, borderRadius: 5, backgroundColor: colors.bgCard },
   topInfo: { flex: 1 },
