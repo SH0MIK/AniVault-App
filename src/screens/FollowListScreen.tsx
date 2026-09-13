@@ -2,71 +2,21 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { getFollowList, FollowListUser } from '../api/social';
+import { WebHeader, WebFooter, WebSectionHeader } from '../components/WebChrome';
 import { colors, radius, fonts } from '../theme';
 
 export default function FollowListScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const { userId, type } = route.params as { userId: number; type: 'followers' | 'following'; username: string };
-
-  const [users, setUsers] = useState<FollowListUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (offset: number, append: boolean) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getFollowList(userId, type, offset);
-      setUsers((prev) => (append ? [...prev, ...res.users] : res.users));
-      setHasMore(res.has_more);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load.');
-    } finally {
-      setLoading(false);
-    }
-  }, [userId, type]);
-
-  useFocusEffect(useCallback(() => { load(0, false); }, [load]));
-
-  if (loading && users.length === 0) {
-    return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
-  }
-
-  return (
-    <FlatList
-      style={styles.container}
-      data={users}
-      keyExtractor={(u) => String(u.id)}
-      onEndReached={() => { if (hasMore && !loading) load(users.length, true); }}
-      onEndReachedThreshold={0.5}
-      renderItem={({ item }) => (
-        <Pressable style={styles.row} onPress={() => navigation.navigate('UserProfile', { username: item.username })}>
-          <Image source={{ uri: item.avatar_url ?? undefined }} style={styles.avatar} contentFit="cover" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.username}>{item.username}</Text>
-            {item.bio && <Text style={styles.bio} numberOfLines={1}>{item.bio}</Text>}
-          </View>
-        </Pressable>
-      )}
-      ListEmptyComponent={
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>{error ?? (type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.')}</Text>
-        </View>
-      }
-    />
-  );
+  const navigation = useNavigation<any>(); const route = useRoute<any>();
+  const { userId, type, username } = route.params as { userId:number; type:'followers'|'following'; username:string };
+  const [users,setUsers]=useState<FollowListUser[]>([]); const [loading,setLoading]=useState(true); const [hasMore,setHasMore]=useState(false); const [error,setError]=useState<string|null>(null);
+  const load=useCallback(async(offset:number,append:boolean)=>{setLoading(true);setError(null);try{const res=await getFollowList(userId,type,offset);setUsers(p=>append?[...p,...res.users]:res.users);setHasMore(res.has_more)}catch(e:any){setError(e?.message??'Failed to load.')}finally{setLoading(false)}},[userId,type]);
+  useFocusEffect(useCallback(()=>{load(0,false)},[load]));
+  return <View style={styles.root}><WebHeader onMenuPress={()=>navigation.openDrawer?.()}/><FlatList data={users} keyExtractor={u=>String(u.id)} onEndReached={()=>{if(hasMore&&!loading)load(users.length,true)}} onEndReachedThreshold={.5} contentContainerStyle={styles.content}
+    ListHeaderComponent={<View><View style={styles.hero}><Text style={styles.kicker}>COMMUNITY</Text><Text style={styles.heroTitle}>{type==='followers'?'Followers':'Following'}</Text><Text style={styles.heroSub}>@{username} · {type==='followers'?'people following this user':'people this user follows'}</Text></View><WebSectionHeader title={type==='followers'?'Followers':'Following'}/>{error?<View style={styles.error}><Ionicons name="alert-circle-outline" size={22} color={colors.accent}/><Text style={styles.errorText}>{error}</Text><Pressable onPress={()=>load(0,false)} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable></View>:null}</View>}
+    renderItem={({item})=><Pressable style={styles.row} onPress={()=>navigation.navigate('UserProfile',{username:item.username})}><Image source={{uri:item.avatar_url??undefined}} style={styles.avatar} contentFit="cover"/><View style={styles.info}><Text style={styles.username}>{item.username}</Text>{item.bio?<Text style={styles.bio} numberOfLines={2}>{item.bio}</Text>:<Text style={styles.muted}>AniVault community member</Text>}</View><Ionicons name="chevron-forward" size={18} color={colors.textMuted}/></Pressable>}
+    ListEmptyComponent={!loading?<View style={styles.empty}><Ionicons name="people-outline" size={34} color={colors.textMuted}/><Text style={styles.emptyTitle}>{error?'Could not load users':type==='followers'?'No followers yet':'Not following anyone yet'}</Text><Text style={styles.muted}>Nothing to show here right now.</Text></View>:null}
+    ListFooterComponent={loading?<View style={styles.footerLoad}><ActivityIndicator color={colors.accent}/></View>:<WebFooter/>}/></View>;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase },
-  center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.bgCard },
-  username: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.bodyMedium },
-  bio: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: fonts.body },
-  emptyState: { padding: 32, alignItems: 'center' },
-  emptyText: { color: colors.textMuted, fontSize: 13, fontFamily: fonts.body },
-});
+const styles=StyleSheet.create({root:{flex:1,backgroundColor:colors.bgBase},content:{paddingBottom:20},hero:{paddingHorizontal:18,paddingTop:22,paddingBottom:8},kicker:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:9,letterSpacing:1.6},heroTitle:{color:colors.textPrimary,fontFamily:fonts.display,fontSize:25,marginTop:6},heroSub:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:11,marginTop:5},row:{marginHorizontal:16,paddingVertical:12,paddingHorizontal:12,backgroundColor:colors.bgCard,borderWidth:1,borderColor:colors.border,borderRadius:radius.md,flexDirection:'row',alignItems:'center',marginBottom:8},avatar:{width:48,height:48,borderRadius:24,backgroundColor:colors.bgSurface},info:{flex:1,marginLeft:12,marginRight:8},username:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:14},bio:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:11,lineHeight:16,marginTop:3},muted:{color:colors.textMuted,fontFamily:fonts.body,fontSize:10,marginTop:3},empty:{alignItems:'center',paddingHorizontal:30,paddingVertical:55},emptyTitle:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:14,marginTop:10},error:{marginHorizontal:16,padding:15,borderRadius:radius.md,backgroundColor:colors.bgSurface,borderWidth:1,borderColor:colors.border,alignItems:'center'},errorText:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:11,textAlign:'center',marginTop:6},retry:{marginTop:10,paddingHorizontal:16,paddingVertical:8,borderRadius:radius.sm,backgroundColor:colors.accent},retryText:{color:'#fff',fontFamily:fonts.bodyBold,fontSize:9},footerLoad:{padding:24,alignItems:'center'}});
