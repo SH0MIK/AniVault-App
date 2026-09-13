@@ -1,18 +1,21 @@
 import React from 'react';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, radius } from '../theme';
 
-export function SiteHeader({ title = 'AniVault', onSearch, onProfile }: { title?: string; onSearch?: () => void; onProfile?: () => void }) {
+const LOGO = 'https://www.anivault.co/assets/img/site-img/logo.png';
+
+export function SiteHeader({ title = '', onSearch, onProfile }: { title?: string; onSearch?: () => void; onProfile?: () => void }) {
   return (
     <View style={styles.header}>
-      <View style={styles.headerBrand}>
-        <Text style={styles.logo}>ANIVAULT</Text>
-        <Text style={styles.headerTitle}>{title}</Text>
-      </View>
+      <Pressable style={styles.brand} onPress={onProfile} accessibilityLabel="AniVault">
+        <Image source={{ uri: LOGO }} style={styles.logo} contentFit="contain" />
+        {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
+      </Pressable>
       <View style={styles.headerActions}>
-        {onSearch && <Pressable onPress={onSearch} style={styles.iconButton}><Text style={styles.icon}>⌕</Text></Pressable>}
-        {onProfile && <Pressable onPress={onProfile} style={styles.iconButton}><Text style={styles.icon}>◉</Text></Pressable>}
+        {onSearch ? <Pressable onPress={onSearch} style={styles.headerButton}><Ionicons name="search-outline" size={20} color={colors.textPrimary} /></Pressable> : null}
+        {onProfile ? <Pressable onPress={onProfile} style={styles.headerButton}><Ionicons name="person-outline" size={19} color={colors.textPrimary} /></Pressable> : null}
       </View>
     </View>
   );
@@ -21,22 +24,25 @@ export function SiteHeader({ title = 'AniVault', onSearch, onProfile }: { title?
 export function SectionTitle({ children, action, onAction }: { children: React.ReactNode; action?: string; onAction?: () => void }) {
   return (
     <View style={styles.sectionHeader}>
-      <View style={styles.titleLine} />
       <Text style={styles.sectionTitle}>{children}</Text>
-      <View style={styles.sectionRule} />
-      {action && <Pressable onPress={onAction}><Text style={styles.action}>{action}</Text></Pressable>}
+      <View style={styles.rule} />
+      {action ? <Pressable onPress={onAction} style={styles.action}><Text style={styles.actionText}>{action}</Text><Ionicons name="arrow-forward" size={13} color={colors.textSecondary} /></Pressable> : null}
     </View>
   );
 }
 
-export function AnimePosterCard({ title, image, subtitle, onPress, width = 118 }: { title: string; image?: string | null; subtitle?: string; onPress?: () => void; width?: number }) {
+export function AnimePosterCard({ title, image, subtitle, score, status, onPress, width = 128 }: { title: string; image?: string | null; subtitle?: string; score?: number | null; status?: string | null; onPress?: () => void; width?: number }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { width }, pressed && styles.cardPressed]}>
-      <View style={[styles.posterWrap, { width, height: width * 1.43 }]}>
-        {image ? <Image source={{ uri: image }} style={styles.poster} contentFit="cover" transition={180} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>AV</Text></View>}
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { width }, pressed && styles.pressed]}>
+      <View style={[styles.poster, { width, height: width * 1.43 }]}>
+        {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={140} /> : <View style={styles.fallback}><Text style={styles.fallbackText}>AV</Text></View>}
+        <View style={styles.posterShade} />
+        {score != null ? <View style={styles.score}><Ionicons name="star" size={10} color={colors.gold} /><Text style={styles.scoreText}>{score.toFixed(1)}</Text></View> : null}
+        {status ? <View style={styles.status}><Text style={styles.statusText}>{status}</Text></View> : null}
+        <View style={styles.add}><Ionicons name="add" size={17} color="#fff" /></View>
       </View>
       <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
-      {subtitle ? <Text style={styles.cardSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+      {subtitle ? <Text style={styles.cardMeta} numberOfLines={1}>{subtitle}</Text> : null}
     </Pressable>
   );
 }
@@ -45,26 +51,32 @@ export function GlassCard({ children, style }: { children: React.ReactNode; styl
   return <View style={[styles.glass, style]}>{children}</View>;
 }
 
+export const webStyles = styles;
+
 const styles = StyleSheet.create({
-  header: { minHeight: 62, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, backgroundColor: colors.bgSurface, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerBrand: { flexDirection: 'row', alignItems: 'baseline', gap: 9 },
-  logo: { color: colors.accent, fontFamily: fonts.display, fontSize: 17, letterSpacing: 1.4 },
-  headerTitle: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  headerActions: { flexDirection: 'row', gap: 7 },
-  iconButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
-  icon: { color: colors.textPrimary, fontSize: 22 },
-  sectionHeader: { paddingHorizontal: 16, marginTop: 22, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  titleLine: { width: 3, height: 18, borderRadius: 2, backgroundColor: colors.accent },
-  sectionTitle: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 13, letterSpacing: 1.2, textTransform: 'uppercase' },
-  sectionRule: { flex: 1, height: 1, backgroundColor: colors.border },
-  action: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 11 },
+  header: { height: 64, backgroundColor: 'rgba(10,11,14,0.97)', borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brand: { height: 42, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  logo: { width: 116, height: 32 },
+  headerTitle: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  headerButton: { width: 38, height: 38, borderRadius: 8, backgroundColor: colors.bgSurface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  sectionHeader: { paddingHorizontal: 15, marginTop: 27, marginBottom: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sectionTitle: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 12, letterSpacing: 1.35, textTransform: 'uppercase' },
+  rule: { flex: 1, height: 1, backgroundColor: colors.border },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actionText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 10 },
   card: { marginRight: 12 },
-  cardPressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
-  posterWrap: { overflow: 'hidden', borderRadius: radius.md, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
-  poster: { width: '100%', height: '100%' },
-  posterFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgCard },
-  posterFallbackText: { color: colors.accent, fontFamily: fonts.display, fontSize: 22 },
-  cardTitle: { color: colors.textPrimary, fontFamily: fonts.bodyMedium, fontSize: 12, lineHeight: 16, marginTop: 7 },
-  cardSubtitle: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 10, marginTop: 2 },
-  glass: { backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  pressed: { opacity: 0.7 },
+  poster: { overflow: 'hidden', borderRadius: 9, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  posterShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 48, backgroundColor: 'rgba(0,0,0,.22)' },
+  fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgCard },
+  fallbackText: { color: colors.accent, fontFamily: fonts.display, fontSize: 22 },
+  score: { position: 'absolute', top: 7, left: 7, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: 'rgba(0,0,0,.76)', borderRadius: 4 },
+  scoreText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 9 },
+  status: { position: 'absolute', left: 7, bottom: 7, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: colors.accent, borderRadius: 4 },
+  statusText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 8, textTransform: 'uppercase' },
+  add: { position: 'absolute', right: 7, bottom: 7, width: 27, height: 27, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { color: colors.textPrimary, fontFamily: fonts.bodySemibold, fontSize: 11.5, lineHeight: 15, marginTop: 7 },
+  cardMeta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 9.5, marginTop: 2 },
+  glass: { backgroundColor: 'rgba(22,26,34,.94)', borderWidth: 1, borderColor: colors.border, borderRadius: 10 },
 });
