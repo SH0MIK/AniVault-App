@@ -2,15 +2,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
 import { getAnimeDetail, getEpisodes, EpisodeItem } from '../api/content';
 import { resolveStream, NativeStream } from '../api/stream';
-import { downloadEpisode, getDownload } from '../db/downloads';
 import { getProgress, saveProgress } from '../db/historyRepo';
 import { useAuth } from '../auth/AuthContext';
 import { colors, fonts, radius } from '../theme';
-import { GlassCard, SectionTitle } from '../components/AniVaultUI';
 
 const DISCORD_APP_ID = '1505538731791093820';
+
+const fmt = (seconds: number) => {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+};
 
 export default function WatchScreen() {
   const { user } = useAuth();
@@ -19,13 +26,11 @@ export default function WatchScreen() {
   const { animeId, episodeNum, title: routeTitle } = route.params as { animeId: number; episodeNum: number; title?: string };
   const video = useRef<Video>(null);
   const lastSaved = useRef(0);
+
   const [anime, setAnime] = useState<any>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [stream, setStream] = useState<NativeStream | null>(null);
-  const [localUri, setLocalUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -33,29 +38,34 @@ export default function WatchScreen() {
   const [resumeAt, setResumeAt] = useState(0);
   const [audio, setAudio] = useState<'sub' | 'dub'>('sub');
   const [server, setServer] = useState('');
+  const [controls, setControls] = useState(true);
 
   const currentEpisode = useMemo(() => episodes.find((e) => Number(e.episode) === Number(episodeNum)), [episodes, episodeNum]);
   const displayTitle = anime?.title ?? routeTitle ?? 'AniVault';
-  const remoteSource = stream?.m3u8 ?? stream?.mp4 ?? null;
-  const source = localUri ?? remoteSource;
-  const canDownload = !!stream?.mp4 && !localUri;
+  const source = stream?.m3u8 ?? stream?.mp4 ?? null;
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null); setStream(null); setLocalUri(null);
+    setLoading(true);
+    setError(null);
+    setStream(null);
     try {
-      const cachedDownload = getDownload(animeId, episodeNum);
-      if (cachedDownload) setLocalUri(cachedDownload.local_uri);
-      if (user) setResumeAt(getProgress(user.id, animeId, episodeNum)?.watch_time ?? 0);
+      const saved = user ? getProgress(user.id, animeId, episodeNum)?.watch_time ?? 0 : 0;
+      setResumeAt(saved);
       const [detail, eps, resolved] = await Promise.all([
         getAnimeDetail(animeId),
         getEpisodes(animeId),
         resolveStream(animeId, episodeNum, audio, server),
       ]);
-      setAnime(detail.anime); setEpisodes(eps.data ?? []); setStream(resolved);
+      setAnime(detail.anime);
+      setEpisodes(eps.data ?? []);
+      setStream(resolved);
       if (!server) setServer(resolved.server ?? resolved.servers?.[0]?.name ?? '');
-    } catch (e: any) { setError(e?.message ?? 'Unable to resolve a playable source.'); }
-    finally { setLoading(false); }
-  }, [animeId, episodeNum, audio, user?.id]);
+    } catch (e: any) {
+      setError(e?.message ?? 'Unable to resolve a playable source.');
+    } finally {
+      setLoading(false);
+    }
+  }, [animeId, episodeNum, audio, server, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -64,30 +74,49 @@ export default function WatchScreen() {
     if (Math.abs(time - lastSaved.current) < 10 && time < total - 5) return;
     lastSaved.current = time;
     saveProgress(user.id, {
-      anime_id: animeId, anime_title: displayTitle, anime_image: anime.image ?? null,
-      episode_num: episodeNum, ep_title: currentEpisode?.title ?? null, ep_thumb: null,
-      watch_time: time, episode_duration: total,
+      anime_id: animeId,
+      anime_title: displayTitle,
+      anime_image: anime.image ?? null,
+      episode_num: episodeNum,
+      ep_title: currentEpisode?.title ?? null,
+      ep_thumb: null,
+      watch_time: time,
+      episode_duration: total,
     });
   }, [user?.id, anime, animeId, episodeNum, displayTitle, currentEpisode?.title]);
 
-  useEffect(() => () => { persistProgress(position / 1000, duration / 1000); }, [persistProgress, position, duration]);
+  useEffect(() => () => persistProgress(position / 1000, duration / 1000), [persistProgress, position, duration]);
 
   useEffect(() => {
     const rpc = NativeModules.AniVaultDiscordPresence;
     if (!rpc) return;
     try {
       rpc.start?.(DISCORD_APP_ID);
-      rpc.update?.(JSON.stringify({ event: playing ? 'playing' : 'paused', title: displayTitle, episode: episodeNum, episodeTitle: currentEpisode?.title ?? '', image: anime?.image ?? '', currentTime: position / 1000, duration: duration / 1000, playing, url: `https://www.anivault.co/watch?id=${animeId}&ep=${episodeNum}` }));
+      rpc.update?.(JSON.stringify({
+        event: playing ? 'playing' : 'paused',
+        title: displayTitle,
+        episode: episodeNum,
+        episodeTitle: currentEpisode?.title ?? '',
+        image: anime?.image ?? '',
+        currentTime: position / 1000,
+        duration: duration / 1000,
+        playing,
+        url: `https://www.anivault.co/watch?id=${animeId}&ep=${episodeNum}`,
+      }));
     } catch {}
   }, [animeId, episodeNum, displayTitle, currentEpisode?.title, anime?.image, position, duration, playing]);
 
-  useEffect(() => () => { try { NativeModules.AniVaultDiscordPresence?.clear?.(); NativeModules.AniVaultDiscordPresence?.close?.(); } catch {} }, []);
+  useEffect(() => () => {
+    try { NativeModules.AniVaultDiscordPresence?.clear?.(); NativeModules.AniVaultDiscordPresence?.close?.(); } catch {}
+  }, []);
 
   const onStatus = (status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
     const nextPosition = status.positionMillis;
     const nextDuration = status.durationMillis ?? 0;
-    setPlaying(status.isPlaying); setPosition(nextPosition); setDuration(nextDuration);
+    setPlaying(status.isPlaying);
+    setPosition(nextPosition);
+    setDuration(nextDuration);
     persistProgress(nextPosition / 1000, nextDuration / 1000);
     if (resumeAt > 0 && nextPosition < 1500) {
       video.current?.setPositionAsync(resumeAt * 1000).catch(() => {});
@@ -95,43 +124,110 @@ export default function WatchScreen() {
     }
   };
 
-  const playEpisode = (ep: number) => navigation.replace('Watch', { animeId, episodeNum: ep, title: displayTitle });
+  const togglePlay = async () => {
+    if (!video.current) return;
+    if (playing) await video.current.pauseAsync(); else await video.current.playAsync();
+  };
 
-  const startDownload = async () => {
-    if (!stream?.mp4 || downloading || localUri) return;
-    setDownloading(true); setDownloadProgress(0);
+  const seek = async (delta: number) => {
+    const next = Math.max(0, Math.min(duration, position / 1000 + delta));
+    await video.current?.setPositionAsync(next * 1000);
+  };
+
+  const jumpEpisode = (ep: number) => navigation.replace('Watch', { animeId, episodeNum: ep, title: displayTitle });
+
+  const selectServer = async (name: string) => {
     try {
-      const record = await downloadEpisode({ animeId, episodeNum, animeTitle: displayTitle, episodeTitle: currentEpisode?.title, image: anime?.image, sourceUri: stream.mp4, onProgress: setDownloadProgress });
-      setLocalUri(record.local_uri);
-    } catch (e: any) { setError(e?.message ?? 'Offline download failed.'); }
-    finally { setDownloading(false); }
+      setLoading(true);
+      const next = await resolveStream(animeId, episodeNum, audio, name);
+      setStream(next);
+      setServer(name);
+    } catch (e: any) {
+      setError(e?.message ?? 'Server failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.root}>
       <View style={styles.topbar}>
-        <Pressable onPress={() => navigation.goBack()}><Text style={styles.back}>‹</Text></Pressable>
-        <View style={styles.topTitle}><Text style={styles.brand}>ANIVAULT</Text><Text style={styles.episodeLabel}>EP {episodeNum}</Text></View>
-        <Pressable onPress={() => navigation.navigate('AnimeDetail', { id: animeId, title: displayTitle })}><Text style={styles.info}>ⓘ</Text></Pressable>
+        <Pressable onPress={() => navigation.goBack()} style={styles.topIcon}><Ionicons name="chevron-back" size={24} color="#fff" /></Pressable>
+        <View style={styles.topCenter}><Text style={styles.topAnime} numberOfLines={1}>{displayTitle}</Text><Text style={styles.topEpisode}>EPISODE {episodeNum}</Text></View>
+        <Pressable onPress={() => navigation.navigate('AnimeDetail', { id: animeId, title: displayTitle })} style={styles.topIcon}><Ionicons name="information-circle-outline" size={23} color="#fff" /></Pressable>
       </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.playerShell}>
-          {source ? <Video ref={video} style={styles.video} source={{ uri: source }} useNativeControls resizeMode={ResizeMode.CONTAIN} shouldPlay onPlaybackStatusUpdate={onStatus} /> : (
-            <View style={styles.playerEmpty}>{loading ? <ActivityIndicator color={colors.accent} size="large" /> : <><Text style={styles.errorTitle}>NO PLAYABLE SOURCE</Text><Text style={styles.errorText}>{error}</Text><Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable></>}</View>
+        <View style={styles.player}>
+          {source ? (
+            <Pressable style={styles.playerPress} onPress={() => setControls((v) => !v)}>
+              <Video
+                ref={video}
+                style={StyleSheet.absoluteFillObject}
+                source={{ uri: source }}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay
+                onPlaybackStatusUpdate={onStatus}
+              />
+              {controls ? (
+                <View style={styles.playerUi}>
+                  <View style={styles.playerScrimTop} />
+                  <View style={styles.centerControls}>
+                    <Pressable onPress={() => seek(-10)} style={styles.roundControl}><Ionicons name="play-back" size={20} color="#fff" /></Pressable>
+                    <Pressable onPress={togglePlay} style={styles.mainPlay}><Ionicons name={playing ? 'pause' : 'play'} size={27} color="#fff" /></Pressable>
+                    <Pressable onPress={() => seek(10)} style={styles.roundControl}><Ionicons name="play-forward" size={20} color="#fff" /></Pressable>
+                  </View>
+                  <View style={styles.playerBottom}>
+                    <View style={styles.seekTrack}><View style={[styles.seekPlayed, { width: `${duration ? Math.min(100, (position / duration) * 100) : 0}%` }]} /></View>
+                    <View style={styles.controlRow}>
+                      <Pressable onPress={togglePlay} style={styles.smallControl}><Ionicons name={playing ? 'pause' : 'play'} size={18} color="#fff" /></Pressable>
+                      <Text style={styles.time}>{fmt(position / 1000)} / {fmt(duration / 1000)}</Text>
+                      <View style={{ flex: 1 }} />
+                      <Pressable style={styles.smallControl}><Ionicons name="settings-outline" size={18} color="#fff" /></Pressable>
+                      <Pressable style={styles.smallControl}><Ionicons name="expand-outline" size={19} color="#fff" /></Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : (
+            <View style={styles.playerEmpty}>
+              {loading ? <ActivityIndicator color={colors.accent} size="large" /> : <>
+                <Ionicons name="alert-circle-outline" size={36} color={colors.accent} />
+                <Text style={styles.errorTitle}>NO PLAYABLE SOURCE</Text>
+                <Text style={styles.errorText}>{error}</Text>
+                <Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable>
+              </>}
+            </View>
           )}
         </View>
+
         <View style={styles.body}>
           <Text style={styles.watchTitle}>{displayTitle}</Text>
-          <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}{localUri ? ' · OFFLINE' : ''}</Text>
-          <View style={styles.actionRow}>
-            {canDownload && <Pressable onPress={startDownload} disabled={downloading} style={styles.downloadBtn}>{downloading ? <Text style={styles.downloadText}>{Math.round(downloadProgress * 100)}%</Text> : <Text style={styles.downloadText}>↓ DOWNLOAD</Text>}</Pressable>}
-            {localUri && <View style={styles.offlineBadge}><Text style={styles.offlineText}>✓ SAVED OFFLINE</Text></View>}
+          <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}</Text>
+
+          <View style={styles.modeRow}>
+            <Text style={styles.modeLabel}>AUDIO</Text>
+            {(['sub', 'dub'] as const).map((value) => <Pressable key={value} onPress={() => setAudio(value)} style={[styles.modeChip, audio === value && styles.modeChipActive]}><Text style={[styles.modeText, audio === value && styles.modeTextActive]}>{value.toUpperCase()}</Text></Pressable>)}
           </View>
-          <View style={styles.modeRow}><Text style={styles.modeLabel}>AUDIO</Text>{(['sub', 'dub'] as const).map((value) => <Pressable key={value} onPress={() => setAudio(value)} style={[styles.modeChip, audio === value && styles.modeChipActive]}><Text style={[styles.modeText, audio === value && styles.modeTextActive]}>{value.toUpperCase()}</Text></Pressable>)}</View>
-          {stream?.servers && stream.servers.length > 0 && <><SectionTitle>Servers</SectionTitle><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>{stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={async () => { try { setLoading(true); setLocalUri(null); const next = await resolveStream(animeId, episodeNum, audio, item.name); setStream(next); setServer(item.name); } catch (e: any) { setError(e?.message ?? 'Server failed.'); } finally { setLoading(false); } }} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}</ScrollView></>}
-          <SectionTitle>Episodes</SectionTitle>
-          <View style={styles.episodeGrid}>{episodes.map((ep) => { const n = Number(ep.episode); const active = n === Number(episodeNum); return <Pressable key={n} onPress={() => playEpisode(n)} style={[styles.epButton, active && styles.epButtonActive]}><Text style={[styles.epNumber, active && styles.epNumberActive]}>{n}</Text>{ep.title ? <Text style={styles.epTitle} numberOfLines={1}>{ep.title}</Text> : null}</Pressable>; })}</View>
-          {anime?.synopsis ? <GlassCard style={styles.synopsis}><Text style={styles.synopsisLabel}>ABOUT</Text><Text style={styles.synopsisText}>{anime.synopsis}</Text></GlassCard> : null}
+
+          {stream?.servers?.length ? <View>
+            <Text style={styles.sectionLabel}>SERVERS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
+              {stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={() => selectServer(item.name)} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}
+            </ScrollView>
+          </View> : null}
+
+          <View style={styles.episodeHeader}><Text style={styles.sectionLabel}>EPISODES</Text><Text style={styles.episodeCount}>{episodes.length} EPISODES</Text></View>
+          <View style={styles.episodeGrid}>
+            {episodes.map((ep) => {
+              const n = Number(ep.episode);
+              const active = n === Number(episodeNum);
+              return <Pressable key={n} onPress={() => jumpEpisode(n)} style={[styles.epButton, active && styles.epButtonActive]}><Text style={[styles.epNumber, active && styles.epNumberActive]}>{n}</Text>{ep.title ? <Text style={[styles.epTitle, active && styles.epTitleActive]} numberOfLines={1}>{ep.title}</Text> : null}</Pressable>;
+            })}
+          </View>
+
+          {anime?.synopsis ? <View style={styles.about}><Text style={styles.sectionLabel}>ABOUT</Text><Text style={styles.aboutText}>{anime.synopsis}</Text></View> : null}
           <View style={{ height: 32 }} />
         </View>
       </ScrollView>
@@ -140,5 +236,54 @@ export default function WatchScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bgBase }, topbar: { height: 58, paddingHorizontal: 14, backgroundColor: colors.bgSurface, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, back: { color: colors.textPrimary, fontSize: 36, lineHeight: 38 }, topTitle: { flex: 1, marginLeft: 10 }, brand: { color: colors.accent, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.2 }, episodeLabel: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 10, marginTop: 1 }, info: { color: colors.textSecondary, fontSize: 22 }, playerShell: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' }, video: { width: '100%', height: '100%' }, playerEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 25 }, errorTitle: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 12, letterSpacing: 1 }, errorText: { color: colors.textMuted, fontFamily: fonts.body, textAlign: 'center', fontSize: 12, marginTop: 8 }, retry: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 9, borderRadius: radius.sm, backgroundColor: colors.accent }, retryText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 11 }, body: { paddingHorizontal: 16 }, watchTitle: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 18, marginTop: 18 }, watchMeta: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, marginTop: 4 }, actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }, downloadBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accent }, downloadText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 10 }, offlineBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.borderAccent }, offlineText: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 10 }, modeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14 }, modeLabel: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 9, letterSpacing: 1 }, modeChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard }, modeChipActive: { borderColor: colors.borderAccent, backgroundColor: colors.accentDim }, modeText: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 10 }, modeTextActive: { color: '#fff' }, serverRow: { paddingHorizontal: 2, gap: 8 }, serverChip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border }, serverActive: { backgroundColor: colors.accentDim, borderColor: colors.borderAccent }, serverText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 11 }, serverTextActive: { color: '#fff' }, episodeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, epButton: { width: 72, minHeight: 42, paddingHorizontal: 7, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border }, epButtonActive: { backgroundColor: colors.accentDim, borderColor: colors.borderAccent }, epNumber: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 12 }, epNumberActive: { color: '#fff' }, epTitle: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 8, marginTop: 2 }, synopsis: { marginTop: 20, padding: 14 }, synopsisLabel: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 10, letterSpacing: 1.3, marginBottom: 7 }, synopsisText: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
+  root: { flex: 1, backgroundColor: colors.bgBase },
+  topbar: { height: 58, paddingHorizontal: 10, backgroundColor: '#0b0c10', borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center' },
+  topIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  topCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
+  topAnime: { color: '#fff', fontFamily: fonts.bodySemibold, fontSize: 13 },
+  topEpisode: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 8, letterSpacing: 1, marginTop: 2 },
+  player: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
+  playerPress: { flex: 1 },
+  playerUi: { ...StyleSheet.absoluteFillObject },
+  playerScrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 70, backgroundColor: 'rgba(0,0,0,.35)' },
+  centerControls: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22 },
+  roundControl: { width: 43, height: 43, borderRadius: 22, backgroundColor: 'rgba(0,0,0,.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,.18)', alignItems: 'center', justifyContent: 'center' },
+  mainPlay: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,.18)', borderWidth: 2, borderColor: 'rgba(255,255,255,.8)', alignItems: 'center', justifyContent: 'center', paddingLeft: 2 },
+  playerBottom: { position: 'absolute', left: 12, right: 12, bottom: 8 },
+  seekTrack: { height: 3, backgroundColor: 'rgba(255,255,255,.28)', borderRadius: 3, overflow: 'hidden' },
+  seekPlayed: { height: 3, backgroundColor: '#fff' },
+  controlRow: { height: 34, flexDirection: 'row', alignItems: 'center' },
+  smallControl: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  time: { color: 'rgba(255,255,255,.85)', fontFamily: fonts.bodyMedium, fontSize: 10, marginLeft: 3 },
+  playerEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 25 },
+  errorTitle: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 11, letterSpacing: 1.2, marginTop: 10 },
+  errorText: { color: colors.textMuted, fontFamily: fonts.body, textAlign: 'center', fontSize: 11, marginTop: 7 },
+  retry: { marginTop: 15, paddingHorizontal: 20, paddingVertical: 9, borderRadius: radius.sm, backgroundColor: colors.accent },
+  retryText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: .5 },
+  body: { paddingHorizontal: 16 },
+  watchTitle: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 18, marginTop: 17 },
+  watchMeta: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 11, marginTop: 4 },
+  modeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14 },
+  modeLabel: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 8, letterSpacing: 1.1, marginRight: 2 },
+  modeChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard },
+  modeChipActive: { borderColor: colors.borderAccent, backgroundColor: colors.accentDim },
+  modeText: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 9 },
+  modeTextActive: { color: '#fff' },
+  sectionLabel: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 10, letterSpacing: 1.4, marginTop: 21, marginBottom: 9 },
+  serverRow: { gap: 8 },
+  serverChip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 7, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  serverActive: { backgroundColor: colors.accentDim, borderColor: colors.borderAccent },
+  serverText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 10 },
+  serverTextActive: { color: '#fff' },
+  episodeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  episodeCount: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 9, marginTop: 21 },
+  episodeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  epButton: { width: 74, minHeight: 40, paddingHorizontal: 7, paddingVertical: 7, borderRadius: 7, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  epButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  epNumber: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 11 },
+  epNumberActive: { color: '#fff' },
+  epTitle: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 7, marginTop: 2 },
+  epTitleActive: { color: 'rgba(255,255,255,.8)' },
+  about: { marginTop: 20, padding: 14, borderRadius: radius.md, backgroundColor: colors.bgSurface, borderWidth: 1, borderColor: colors.border },
+  aboutText: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
 });
