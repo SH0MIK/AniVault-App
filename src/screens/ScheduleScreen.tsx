@@ -1,0 +1,93 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { getSchedule, ScheduleCard } from '../api/content';
+import { WebHeader, WebSectionHeader, WebFooter } from '../components/WebChrome';
+import { colors, fonts, radius } from '../theme';
+
+const days = [['monday','Mon'],['tuesday','Tue'],['wednesday','Wed'],['thursday','Thu'],['friday','Fri'],['saturday','Sat'],['sunday','Sun']] as const;
+
+export default function ScheduleScreen() {
+  const navigation = useNavigation<any>();
+  const today = useMemo(() => ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][new Date().getDay()], []);
+  const [day, setDay] = useState(today);
+  const [items, setItems] = useState<ScheduleCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async (d: string) => {
+    setLoading(true); setError(null);
+    try { const r = await getSchedule(d); setItems(r.data); }
+    catch (e: any) { setError(e.message ?? 'Failed to load schedule.'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(day); }, [day, load]);
+  const refresh = async () => { setRefreshing(true); await load(day); setRefreshing(false); };
+
+  return <View style={styles.container}>
+    <WebHeader navigation={navigation} routeName="Schedule" />
+    <FlatList
+      data={items}
+      keyExtractor={x => String(x.id)}
+      contentContainerStyle={styles.list}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
+      ListHeaderComponent={<View>
+        <View style={styles.hero}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.kicker}>AIRING</Text>
+            <Text style={styles.heroTitle}>Schedule</Text>
+            <Text style={styles.subtitle}>Weekly airing schedule</Text>
+          </View>
+          <View style={styles.heroIcon}><Ionicons name="calendar-outline" size={23} color={colors.accent} /></View>
+        </View>
+        <FlatList horizontal data={days} keyExtractor={x => x[0]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days} renderItem={({ item }) => <Pressable onPress={() => setDay(item[0])} style={({ pressed }) => [styles.day, day === item[0] && styles.dayActive, pressed && styles.dayPressed]}><Text style={[styles.dayText, day === item[0] && styles.dayTextActive]}>{item[1]}</Text>{today === item[0] && <View style={styles.dot} />}</Pressable>} />
+        <WebSectionHeader title="Airing Schedule" />
+        {error && <View style={styles.error}><Ionicons name="cloud-offline-outline" size={17} color={colors.accent} /><Text style={styles.errorText}>{error}</Text></View>}
+      </View>}
+      ListEmptyComponent={!loading ? <View style={styles.empty}><Ionicons name="calendar-outline" size={40} color={colors.textMuted} /><Text style={styles.emptyTitle}>No shows scheduled</Text><Text style={styles.emptyText}>There may be no entries for this day.</Text></View> : null}
+      ListFooterComponent={<>{loading ? <ActivityIndicator color={colors.accent} style={{ margin: 20 }} /> : null}<WebFooter /></>}
+      renderItem={({ item }) => <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => navigation.navigate('AnimeDetail', { id: item.id, title: item.title })}>
+        <View style={styles.timeBox}><Text style={styles.time}>{item.broadcast?.time || 'TBA'}</Text></View>
+        <Image source={{ uri: item.image }} style={styles.poster} contentFit="cover" transition={120} />
+        <View style={styles.info}><Text style={styles.name} numberOfLines={2}>{item.title}</Text><Text style={styles.meta}>{item.type || 'Anime'}{item.episodes ? ` · ${item.episodes} eps` : ''}</Text>{item.score != null && <View style={styles.score}><Ionicons name="star" size={9} color={colors.gold} /><Text style={styles.scoreText}>{item.score.toFixed(1)}</Text></View>}</View>
+        <View style={styles.chevron}><Ionicons name="chevron-forward" size={16} color={colors.textMuted} /></View>
+      </Pressable>}
+    />
+  </View>;
+}
+
+const styles = StyleSheet.create({
+  container:{flex:1,backgroundColor:colors.bgBase},
+  list:{paddingBottom:0},
+  hero:{paddingHorizontal:15,paddingTop:20,paddingBottom:15,backgroundColor:colors.bgSurface,borderBottomWidth:1,borderBottomColor:colors.border,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
+  heroCopy:{flex:1},
+  kicker:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:8,letterSpacing:1.8},
+  heroTitle:{color:colors.textPrimary,fontFamily:fonts.display,fontSize:22,marginTop:5},
+  subtitle:{color:colors.textMuted,fontFamily:fonts.body,fontSize:11,marginTop:4},
+  heroIcon:{width:46,height:46,borderRadius:12,backgroundColor:colors.bgCard,borderWidth:1,borderColor:colors.border,alignItems:'center',justifyContent:'center'},
+  days:{paddingHorizontal:14,paddingVertical:10,gap:7,borderBottomWidth:1,borderBottomColor:colors.border},
+  day:{minWidth:52,alignItems:'center',paddingVertical:7,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgSurface,marginRight:2},
+  dayActive:{backgroundColor:colors.accent,borderColor:colors.accent},
+  dayPressed:{opacity:.78},
+  dayText:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:10.5},
+  dayTextActive:{color:'#fff'},
+  dot:{width:4,height:4,borderRadius:2,backgroundColor:colors.gold,marginTop:3},
+  row:{minHeight:84,marginHorizontal:12,marginBottom:8,flexDirection:'row',alignItems:'center',gap:9,padding:8,backgroundColor:colors.bgSurface,borderRadius:radius.md,borderWidth:1,borderColor:colors.border},
+  rowPressed:{backgroundColor:colors.bgHover,borderColor:colors.borderAccent,opacity:.92},
+  timeBox:{width:46,alignItems:'center'},
+  time:{color:colors.accent,fontFamily:fonts.bodyBold,fontSize:10,textAlign:'center'},
+  poster:{width:48,height:68,borderRadius:6,backgroundColor:colors.bgCard},
+  info:{flex:1,minWidth:0},
+  name:{color:colors.textPrimary,fontFamily:fonts.bodySemibold,fontSize:12,lineHeight:16},
+  meta:{color:colors.textMuted,fontFamily:fonts.body,fontSize:9.5,marginTop:3},
+  score:{alignSelf:'flex-start',marginTop:5,flexDirection:'row',alignItems:'center',gap:3},
+  scoreText:{color:colors.textSecondary,fontFamily:fonts.bodySemibold,fontSize:8.5},
+  chevron:{width:24,alignItems:'center'},
+  error:{margin:12,padding:10,borderWidth:1,borderColor:colors.borderAccent,borderRadius:8,backgroundColor:colors.bgSurface,flexDirection:'row',gap:8,alignItems:'center'},
+  errorText:{flex:1,color:colors.textSecondary,fontFamily:fonts.body,fontSize:11},
+  empty:{alignItems:'center',paddingTop:65,paddingHorizontal:30},
+  emptyTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:15,marginTop:12},
+  emptyText:{color:colors.textMuted,fontFamily:fonts.body,fontSize:11,textAlign:'center',marginTop:5}
+});

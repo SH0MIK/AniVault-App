@@ -1,6 +1,5 @@
-// Wraps the same /api/notifications.php the website uses — works as-is with
-// the mobile bearer token since Session.load() accepts either.
 import { apiFetch, apiFetchForm } from './client';
+import { cacheGet, cacheGetStale, cachePut } from '../db/cache';
 
 export interface NotificationItem {
   id: number;
@@ -14,8 +13,19 @@ export interface NotificationItem {
   actor_avatar: string | null;
 }
 
-export function getNotifications(): Promise<{ success: boolean; notifications: NotificationItem[]; unread: number }> {
-  return apiFetch('/api/notifications.php?action=get');
+const CACHE_KEY = 'notifications';
+type NotificationsResult = { success: boolean; notifications: NotificationItem[]; unread: number };
+
+export async function getNotifications(): Promise<NotificationsResult> {
+  try {
+    const result = await apiFetch<NotificationsResult>('/api/notifications.php?action=get');
+    cachePut(CACHE_KEY, result);
+    return result;
+  } catch {
+    const cached = cacheGet<NotificationsResult>(CACHE_KEY) ?? cacheGetStale<NotificationsResult>(CACHE_KEY);
+    if (cached) return cached;
+    throw new Error('Notifications are unavailable offline. Open them once while online to cache them.');
+  }
 }
 
 export function getUnreadCount(): Promise<{ success: boolean; unread: number }> {

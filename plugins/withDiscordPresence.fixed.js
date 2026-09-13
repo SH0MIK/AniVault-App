@@ -15,54 +15,32 @@ module.exports = function withDiscordPresence(config) {
     if (cfg.modResults.language === 'groovy') {
       const marker = "maven { url 'https://www.jitpack.io' }";
       if (!cfg.modResults.contents.includes(marker)) {
-        cfg.modResults.contents = cfg.modResults.contents.replace(
-          /allprojects\s*\{\s*repositories\s*\{/,
-          match => `${match}\n        maven { url 'https://www.jitpack.io' }`
-        );
+        cfg.modResults.contents = cfg.modResults.contents.replace(/allprojects\s*\{\s*repositories\s*\{/, match => `${match}\n        maven { url 'https://www.jitpack.io' }`);
       }
     }
     return cfg;
   });
-
   config = withAppBuildGradle(config, cfg => {
     let text = cfg.modResults.contents;
     if (!text.includes('discord_partner_sdk.aar')) {
-      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '${APP_ID}'\n        externalNativeBuild {\n            cmake {\n                arguments '-DANDROID_STL=c++_shared', '-DCMAKE_ANDROID_STL_TYPE=c++_shared'\n            }\n        }\n    }\n    externalNativeBuild {\n        cmake {\n            path file('src/main/cpp/CMakeLists.txt')\n            version '3.22.1'\n        }\n    }`);
+      text = text.replace(/android\s*\{/, `android {\n    buildFeatures { prefab true }\n    defaultConfig {\n        ndk { abiFilters 'arm64-v8a' }\n        buildConfigField 'long', 'DISCORD_APPLICATION_ID', '${APP_ID}'\n    }\n    externalNativeBuild {\n        cmake { path file('src/main/cpp/CMakeLists.txt'); version '3.22.1' }\n    }`);
     }
-    if (!text.includes("implementation files('libs/discord_partner_sdk.aar')")) {
-      text = text.replace(/dependencies\s*\{/, `dependencies {\n    implementation files('libs/discord_partner_sdk.aar')`);
-    }
+    if (!text.includes("implementation files('libs/discord_partner_sdk.aar')")) text = text.replace(/dependencies\s*\{/, `dependencies {\n    implementation files('libs/discord_partner_sdk.aar')`);
     cfg.modResults.contents = text;
     return cfg;
   });
-
   config = withMainApplication(config, cfg => {
     let text = cfg.modResults.contents;
     if (!text.includes('co.anivault.presence.DiscordPresencePackage')) {
-      text = text.replace(
-        /package\s+([^\n]+)\n/,
-        match => `${match}\nimport co.anivault.presence.DiscordPresencePackage\n`
-      );
-      const patterns = [
-        /(PackageList\(this\)\.packages\.apply\s*\{)/,
-        /(PackageList\(this\)\.packages\s*\.toMutableList\(\)\s*\.apply\s*\{)/,
-      ];
+      text = text.replace(/package\s+([^\n]+)\n/, match => `${match}\nimport co.anivault.presence.DiscordPresencePackage\n`);
+      const patterns = [/(PackageList\(this\)\.packages\.apply\s*\{)/, /(PackageList\(this\)\.packages\s*\.toMutableList\(\)\s*\.apply\s*\{)/];
       let injected = false;
-      for (const re of patterns) {
-        if (re.test(text)) {
-          text = text.replace(re, '$1\n            add(DiscordPresencePackage())');
-          injected = true;
-          break;
-        }
-      }
-      if (!injected) {
-        text = text.replace(/(override\s+fun\s+getPackages\(\):\s*List<ReactPackage>\s*\{)/, '$1\n        return PackageList(this).packages + DiscordPresencePackage()');
-      }
+      for (const re of patterns) if (re.test(text)) { text = text.replace(re, '$1\n            add(DiscordPresencePackage())'); injected = true; break; }
+      if (!injected) text = text.replace(/(override\s+fun\s+getPackages\(\):\s*List<ReactPackage>\s*\{)/, '$1\n        return PackageList(this).packages + DiscordPresencePackage()');
     }
     cfg.modResults.contents = text;
     return cfg;
   });
-
   config.modRequest = config.modRequest || {};
   const { withDangerousMod } = require('@expo/config-plugins');
   config = withDangerousMod(config, ['android', async cfg => {
@@ -72,6 +50,5 @@ module.exports = function withDiscordPresence(config) {
     copyRecursive(path.join(moduleRoot, 'src', 'main', 'java'), path.join(root, 'app', 'src', 'main', 'java'));
     return cfg;
   }]);
-
   return config;
 };

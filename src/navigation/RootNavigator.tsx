@@ -1,8 +1,6 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
 import MyListScreen from '../screens/MyListScreen';
 import BrowseScreen from '../screens/BrowseScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -18,10 +16,18 @@ import WatchNowScreen from '../screens/WatchNowScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import CharacterScreen from '../screens/CharacterScreen';
+import SeasonalScreen from '../screens/SeasonalScreen';
+import TopAnimeScreen from '../screens/TopAnimeScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 import { colors } from '../theme';
 
 export type RootStackParamList = {
-  Tabs: undefined;
+  Home: undefined;
+  MyList: undefined;
+  Browse: { q?: string; genre?: number } | undefined;
+  Chat: undefined;
+  Notifications: undefined;
+  Profile: undefined;
   AnimeDetail: { id: number; title?: string };
   Watch: { animeId: number; episodeNum: number; title?: string };
   AccountSettings: undefined;
@@ -31,75 +37,36 @@ export type RootStackParamList = {
   History: undefined;
   Announcements: undefined;
   Character: { id: number };
-};
-
-export type TabParamList = {
-  Home: undefined;
-  MyList: undefined;
-  Browse: undefined;
-  Chat: undefined;
-  Notifications: undefined;
-  Profile: undefined;
+  Seasonal: undefined;
+  TopAnime: undefined;
+  Schedule: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator<TabParamList>();
-
-const navTheme = {
-  dark: true,
-  colors: {
-    primary: colors.accent, background: colors.bgBase, card: colors.bgSurface,
-    text: colors.textPrimary, border: colors.border, notification: colors.accent,
-  },
-} as const;
-
-function Tabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.bgSurface, borderTopColor: colors.border },
-        headerStyle: { backgroundColor: colors.bgSurface },
-        headerTintColor: colors.textPrimary,
-        tabBarIcon: ({ color, size }) => {
-          const map: Record<string, string> = { Home: 'home', MyList: 'list', Browse: 'search', Chat: 'chatbubbles', Notifications: 'notifications', Profile: 'person' };
-          return <Ionicons name={(map[route.name] ?? 'ellipse') as any} size={size} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="MyList" component={MyListScreen} options={{ title: 'My List' }} />
-      <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse', headerShown: false }} />
-      <Tab.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-    </Tab.Navigator>
-  );
-}
+const navTheme = { dark: true, colors: { primary: colors.accent, background: colors.bgBase, card: colors.bgSurface, text: colors.textPrimary, border: colors.border, notification: colors.accent } } as const;
 
 export default function RootNavigator() {
   return (
     <NavigationContainer theme={navTheme as any}>
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.bgSurface }, headerTintColor: colors.textPrimary }}>
-        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-        <Stack.Screen
-          name="AnimeDetail"
-          component={AnimeDetailScreen}
-          options={({ route }) => ({ title: route.params?.title ?? 'Anime' })}
-        />
-        <Stack.Screen name="Watch" component={WatchScreen} options={{ title: 'Watching', headerShown: false }} />
-        <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ title: 'Account Settings' }} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({ route }) => ({ title: route.params?.username ?? 'Profile' })} />
-        <Stack.Screen
-          name="FollowList"
-          component={FollowListScreen}
-          options={({ route }) => ({ title: route.params?.type === 'followers' ? 'Followers' : 'Following' })}
-        />
-        <Stack.Screen name="WatchNow" component={WatchNowScreen} options={{ title: 'Watch Now' }} />
-        <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'Watch History' }} />
-        <Stack.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: 'Announcements' }} />
-        <Stack.Screen name="Character" component={CharacterScreen} options={{ title: 'Character' }} />
+      <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bgBase }, animation: 'fade' }}>
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="MyList" component={MyListScreen} />
+        <Stack.Screen name="Browse" component={BrowseScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="AnimeDetail" component={AnimeDetailScreen} />
+        <Stack.Screen name="Watch" component={WatchScreen} options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
+        <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+        <Stack.Screen name="FollowList" component={FollowListScreen} />
+        <Stack.Screen name="WatchNow" component={WatchNowScreen} />
+        <Stack.Screen name="History" component={HistoryScreen} />
+        <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
+        <Stack.Screen name="Character" component={CharacterScreen} />
+        <Stack.Screen name="Seasonal" component={SeasonalScreen} />
+        <Stack.Screen name="TopAnime" component={TopAnimeScreen} />
+        <Stack.Screen name="Schedule" component={ScheduleScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

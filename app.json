@@ -26,6 +26,7 @@
       }
     },
     "plugins": [
+      "./plugins/withDiscordPresence",
       [
         "expo-notifications",
         {
