@@ -42,6 +42,7 @@ export default function WatchScreen() {
   const [server, setServer] = useState('');
   const [controls, setControls] = useState(true);
   const [volume, setVolume] = useState(1);
+  const [seekWidth, setSeekWidth] = useState(1);
 
   const currentEpisode = useMemo(() => episodes.find((e) => Number(e.episode) === Number(episodeNum)), [episodes, episodeNum]);
   const displayTitle = anime?.title ?? routeTitle ?? 'AniVault';
@@ -155,8 +156,7 @@ export default function WatchScreen() {
 
   const seekToPercent = async (percent: number) => {
     if (!video.current || !duration) return;
-    const next = Math.max(0, Math.min(1, percent)) * duration;
-    await video.current.setPositionAsync(next);
+    await video.current.setPositionAsync(Math.max(0, Math.min(1, percent)) * duration);
     showControls();
   };
 
@@ -184,15 +184,11 @@ export default function WatchScreen() {
   const selectServer = async (name: string) => {
     if (name === server) return;
     try {
-      const wasPlaying = playing;
-      const savedTime = position;
       setLoading(true);
       const next = await resolveStream(animeId, episodeNum, audio, name);
       setStream(next);
       setServer(name);
-      setPosition(savedTime);
       setControls(true);
-      if (!wasPlaying) await video.current?.pauseAsync().catch(() => {});
     } catch (e: any) {
       setError(e?.message ?? 'Server failed.');
     } finally {
@@ -212,36 +208,22 @@ export default function WatchScreen() {
         <View style={styles.player}>
           {source ? (
             <Pressable style={styles.playerPress} onPress={() => { if (controls) setControls(false); else showControls(); }}>
-              <Video
-                ref={video}
-                style={StyleSheet.absoluteFillObject}
-                source={{ uri: source }}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay
-                volume={volume}
-                onPlaybackStatusUpdate={onStatus}
-              />
+              <Video ref={video} style={StyleSheet.absoluteFillObject} source={{ uri: source }} resizeMode={ResizeMode.CONTAIN} shouldPlay volume={volume} onPlaybackStatusUpdate={onStatus} />
               {controls ? (
                 <View style={styles.playerUi} pointerEvents="box-none">
                   <View style={styles.playerScrimTop} pointerEvents="none" />
-
                   <View style={styles.mobileTopPill}>
                     <Pressable style={styles.glassButton} onPress={cycleVolume}><Ionicons name={volume === 0 ? 'volume-mute-outline' : 'volume-high-outline'} size={17} color="#fff" /></Pressable>
-                    <Pressable style={styles.glassButton} onPress={() => setAudio(audio === 'sub' ? 'dub' : 'sub')}><Ionicons name="text-outline" size={17} color="#fff" /></Pressable>
+                    <Pressable style={styles.glassButton} onPress={() => selectAudio(audio === 'sub' ? 'dub' : 'sub')}><Ionicons name="text-outline" size={17} color="#fff" /></Pressable>
                     <Pressable style={styles.glassButton} onPress={() => navigation.navigate('AnimeDetail', { id: animeId, title: displayTitle })}><Ionicons name="settings-outline" size={17} color="#fff" /></Pressable>
                   </View>
-
                   <View style={styles.centerControls} pointerEvents="box-none">
                     <Pressable onPress={() => seek(-10)} style={styles.centerSide}><Ionicons name="play-back" size={21} color="#fff" /><Text style={styles.seekLabel}>10</Text></Pressable>
                     <Pressable onPress={togglePlay} style={styles.mainPlay}><Ionicons name={playing ? 'pause' : 'play'} size={28} color="#fff" /></Pressable>
                     <Pressable onPress={() => seek(10)} style={styles.centerSide}><Ionicons name="play-forward" size={21} color="#fff" /><Text style={styles.seekLabel}>10</Text></Pressable>
                   </View>
-
                   <View style={styles.playerBottom} pointerEvents="box-none">
-                    <Pressable
-                      style={styles.seekContainer}
-                      onPress={(e) => seekToPercent(e.nativeEvent.locationX / Math.max(1, e.nativeEvent.pageX ? e.nativeEvent.pageX : 1))}
-                    >
+                    <Pressable style={styles.seekContainer} onLayout={(e) => setSeekWidth(Math.max(1, e.nativeEvent.layout.width))} onPress={(e) => seekToPercent(e.nativeEvent.locationX / seekWidth)}>
                       <View style={styles.seekTrack}><View style={[styles.seekPlayed, { width: `${duration ? Math.min(100, (position / duration) * 100) : 0}%` }]} /></View>
                     </Pressable>
                     <View style={styles.controlRow}>
@@ -265,8 +247,7 @@ export default function WatchScreen() {
             <View style={styles.playerEmpty}>
               {loading ? <ActivityIndicator color={colors.accent} size="large" /> : <>
                 <Ionicons name="alert-circle-outline" size={36} color={colors.accent} />
-                <Text style={styles.errorTitle}>NO PLAYABLE SOURCE</Text>
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorTitle}>NO PLAYABLE SOURCE</Text><Text style={styles.errorText}>{error}</Text>
                 <Pressable onPress={load} style={styles.retry}><Text style={styles.retryText}>RETRY</Text></Pressable>
               </>}
             </View>
@@ -276,28 +257,10 @@ export default function WatchScreen() {
         <View style={styles.body}>
           <Text style={styles.watchTitle}>{displayTitle}</Text>
           <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}</Text>
-
-          <View style={styles.modeRow}>
-            <Text style={styles.modeLabel}>AUDIO</Text>
-            {(['sub', 'dub'] as const).map((value) => <Pressable key={value} onPress={() => selectAudio(value)} style={[styles.modeChip, audio === value && styles.modeChipActive]}><Text style={[styles.modeText, audio === value && styles.modeTextActive]}>{value.toUpperCase()}</Text></Pressable>)}
-          </View>
-
-          {stream?.servers?.length ? <View>
-            <Text style={styles.sectionLabel}>SERVERS</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
-              {stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={() => selectServer(item.name)} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}
-            </ScrollView>
-          </View> : null}
-
+          <View style={styles.modeRow}><Text style={styles.modeLabel}>AUDIO</Text>{(['sub', 'dub'] as const).map((value) => <Pressable key={value} onPress={() => selectAudio(value)} style={[styles.modeChip, audio === value && styles.modeChipActive]}><Text style={[styles.modeText, audio === value && styles.modeTextActive]}>{value.toUpperCase()}</Text></Pressable>)}</View>
+          {stream?.servers?.length ? <View><Text style={styles.sectionLabel}>SERVERS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>{stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={() => selectServer(item.name)} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}</ScrollView></View> : null}
           <View style={styles.episodeHeader}><Text style={styles.sectionLabel}>EPISODES</Text><Text style={styles.episodeCount}>{episodes.length} EPISODES</Text></View>
-          <View style={styles.episodeGrid}>
-            {episodes.map((ep) => {
-              const n = Number(ep.episode);
-              const active = n === Number(episodeNum);
-              return <Pressable key={n} onPress={() => jumpEpisode(n)} style={[styles.epButton, active && styles.epButtonActive]}><Text style={[styles.epNumber, active && styles.epNumberActive]}>{n}</Text>{ep.title ? <Text style={[styles.epTitle, active && styles.epTitleActive]} numberOfLines={1}>{ep.title}</Text> : null}</Pressable>;
-            })}
-          </View>
-
+          <View style={styles.episodeGrid}>{episodes.map((ep) => { const n = Number(ep.episode); const active = n === Number(episodeNum); return <Pressable key={n} onPress={() => jumpEpisode(n)} style={[styles.epButton, active && styles.epButtonActive]}><Text style={[styles.epNumber, active && styles.epNumberActive]}>{n}</Text>{ep.title ? <Text style={[styles.epTitle, active && styles.epTitleActive]} numberOfLines={1}>{ep.title}</Text> : null}</Pressable>; })}</View>
           {anime?.synopsis ? <View style={styles.about}><Text style={styles.sectionLabel}>ABOUT</Text><Text style={styles.aboutText}>{anime.synopsis}</Text></View> : null}
           <View style={{ height: 32 }} />
         </View>
@@ -307,60 +270,5 @@ export default function WatchScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bgBase },
-  topbar: { height: 58, paddingHorizontal: 10, backgroundColor: '#0b0c10', borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center' },
-  topIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  topCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
-  topAnime: { color: '#fff', fontFamily: fonts.bodySemibold, fontSize: 13 },
-  topEpisode: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 8, letterSpacing: 1, marginTop: 2 },
-  player: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000' },
-  playerPress: { flex: 1 },
-  playerUi: { ...StyleSheet.absoluteFillObject },
-  playerScrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 82, backgroundColor: 'rgba(0,0,0,.38)' },
-  mobileTopPill: { position: 'absolute', top: 10, right: 10, flexDirection: 'row', gap: 2, padding: 3, borderRadius: 18, backgroundColor: 'rgba(0,0,0,.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,.14)' },
-  glassButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
-  centerControls: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 25 },
-  centerSide: { width: 48, height: 58, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  seekLabel: { position: 'absolute', top: 28, color: 'rgba(255,255,255,.82)', fontFamily: fonts.bodyBold, fontSize: 7 },
-  mainPlay: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(0,0,0,.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,.62)', alignItems: 'center', justifyContent: 'center', paddingLeft: 2 },
-  playerBottom: { position: 'absolute', left: 10, right: 10, bottom: 7 },
-  seekContainer: { height: 18, justifyContent: 'center' },
-  seekTrack: { height: 3, backgroundColor: 'rgba(255,255,255,.28)', borderRadius: 3, overflow: 'hidden' },
-  seekPlayed: { height: 3, backgroundColor: '#fff' },
-  controlRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center' },
-  leftPill: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(0,0,0,.66)', borderWidth: 1, borderColor: 'rgba(255,255,255,.13)', paddingHorizontal: 4 },
-  rightPill: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(0,0,0,.66)', borderWidth: 1, borderColor: 'rgba(255,255,255,.13)', paddingHorizontal: 4 },
-  smallControl: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center' },
-  time: { color: 'rgba(255,255,255,.88)', fontFamily: fonts.bodyMedium, fontSize: 9, marginHorizontal: 4 },
-  playerEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 25 },
-  errorTitle: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 11, letterSpacing: 1.2, marginTop: 10 },
-  errorText: { color: colors.textMuted, fontFamily: fonts.body, textAlign: 'center', fontSize: 11, marginTop: 7 },
-  retry: { marginTop: 15, paddingHorizontal: 20, paddingVertical: 9, borderRadius: radius.sm, backgroundColor: colors.accent },
-  retryText: { color: '#fff', fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: .5 },
-  body: { paddingHorizontal: 16 },
-  watchTitle: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 18, marginTop: 17 },
-  watchMeta: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 11, marginTop: 4 },
-  modeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14 },
-  modeLabel: { color: colors.textMuted, fontFamily: fonts.displayMedium, fontSize: 8, letterSpacing: 1.1, marginRight: 2 },
-  modeChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard },
-  modeChipActive: { borderColor: colors.borderAccent, backgroundColor: colors.accentDim },
-  modeText: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 9 },
-  modeTextActive: { color: '#fff' },
-  sectionLabel: { color: colors.accent, fontFamily: fonts.displayMedium, fontSize: 10, letterSpacing: 1.4, marginTop: 21, marginBottom: 9 },
-  serverRow: { gap: 8 },
-  serverChip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 7, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
-  serverActive: { backgroundColor: colors.accentDim, borderColor: colors.borderAccent },
-  serverText: { color: colors.textSecondary, fontFamily: fonts.bodyMedium, fontSize: 10 },
-  serverTextActive: { color: '#fff' },
-  episodeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  episodeCount: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 9, marginTop: 21 },
-  episodeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  epButton: { width: 74, minHeight: 40, paddingHorizontal: 7, paddingVertical: 7, borderRadius: 7, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
-  epButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  epNumber: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 11 },
-  epNumberActive: { color: '#fff' },
-  epTitle: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 7, marginTop: 2 },
-  epTitleActive: { color: 'rgba(255,255,255,.8)' },
-  about: { marginTop: 20, padding: 14, borderRadius: radius.md, backgroundColor: colors.bgSurface, borderWidth: 1, borderColor: colors.border },
-  aboutText: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, lineHeight: 18 },
+  root:{flex:1,backgroundColor:colors.bgBase},topbar:{height:58,paddingHorizontal:10,backgroundColor:'#0b0c10',borderBottomWidth:1,borderBottomColor:colors.border,flexDirection:'row',alignItems:'center'},topIcon:{width:40,height:40,alignItems:'center',justifyContent:'center'},topCenter:{flex:1,alignItems:'center',paddingHorizontal:8},topAnime:{color:'#fff',fontFamily:fonts.bodySemibold,fontSize:13},topEpisode:{color:colors.textMuted,fontFamily:fonts.displayMedium,fontSize:8,letterSpacing:1,marginTop:2},player:{width:'100%',aspectRatio:16/9,backgroundColor:'#000'},playerPress:{flex:1},playerUi:{...StyleSheet.absoluteFillObject},playerScrimTop:{position:'absolute',top:0,left:0,right:0,height:82,backgroundColor:'rgba(0,0,0,.38)'},mobileTopPill:{position:'absolute',top:10,right:10,flexDirection:'row',gap:2,padding:3,borderRadius:18,backgroundColor:'rgba(0,0,0,.58)',borderWidth:1,borderColor:'rgba(255,255,255,.14)'},glassButton:{width:32,height:32,alignItems:'center',justifyContent:'center',borderRadius:16},centerControls:{flex:1,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:25},centerSide:{width:48,height:58,alignItems:'center',justifyContent:'center',position:'relative'},seekLabel:{position:'absolute',top:28,color:'rgba(255,255,255,.82)',fontFamily:fonts.bodyBold,fontSize:7},mainPlay:{width:58,height:58,borderRadius:29,backgroundColor:'rgba(0,0,0,.45)',borderWidth:1,borderColor:'rgba(255,255,255,.62)',alignItems:'center',justifyContent:'center',paddingLeft:2},playerBottom:{position:'absolute',left:10,right:10,bottom:7},seekContainer:{height:18,justifyContent:'center'},seekTrack:{height:3,backgroundColor:'rgba(255,255,255,.28)',borderRadius:3,overflow:'hidden'},seekPlayed:{height:3,backgroundColor:'#fff'},controlRow:{minHeight:38,flexDirection:'row',alignItems:'center'},leftPill:{flexDirection:'row',alignItems:'center',borderRadius:20,backgroundColor:'rgba(0,0,0,.66)',borderWidth:1,borderColor:'rgba(255,255,255,.13)',paddingHorizontal:4},rightPill:{flexDirection:'row',alignItems:'center',borderRadius:20,backgroundColor:'rgba(0,0,0,.66)',borderWidth:1,borderColor:'rgba(255,255,255,.13)',paddingHorizontal:4},smallControl:{width:31,height:31,alignItems:'center',justifyContent:'center'},time:{color:'rgba(255,255,255,.88)',fontFamily:fonts.bodyMedium,fontSize:9,marginHorizontal:4},playerEmpty:{flex:1,alignItems:'center',justifyContent:'center',padding:25},errorTitle:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:11,letterSpacing:1.2,marginTop:10},errorText:{color:colors.textMuted,fontFamily:fonts.body,textAlign:'center',fontSize:11,marginTop:7},retry:{marginTop:15,paddingHorizontal:20,paddingVertical:9,borderRadius:radius.sm,backgroundColor:colors.accent},retryText:{color:'#fff',fontFamily:fonts.bodyBold,fontSize:10,letterSpacing:.5},body:{paddingHorizontal:16},watchTitle:{color:colors.textPrimary,fontFamily:fonts.displayMedium,fontSize:18,marginTop:17},watchMeta:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:11,marginTop:4},modeRow:{flexDirection:'row',alignItems:'center',gap:7,marginTop:14},modeLabel:{color:colors.textMuted,fontFamily:fonts.displayMedium,fontSize:8,letterSpacing:1.1,marginRight:2},modeChip:{paddingHorizontal:11,paddingVertical:6,borderRadius:7,borderWidth:1,borderColor:colors.border,backgroundColor:colors.bgCard},modeChipActive:{borderColor:colors.borderAccent,backgroundColor:colors.accentDim},modeText:{color:colors.textMuted,fontFamily:fonts.bodyBold,fontSize:9},modeTextActive:{color:'#fff'},sectionLabel:{color:colors.accent,fontFamily:fonts.displayMedium,fontSize:10,letterSpacing:1.4,marginTop:21,marginBottom:9},serverRow:{gap:8},serverChip:{paddingHorizontal:13,paddingVertical:8,borderRadius:7,backgroundColor:colors.bgCard,borderWidth:1,borderColor:colors.border},serverActive:{backgroundColor:colors.accentDim,borderColor:colors.borderAccent},serverText:{color:colors.textSecondary,fontFamily:fonts.bodyMedium,fontSize:10},serverTextActive:{color:'#fff'},episodeHeader:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},episodeCount:{color:colors.textMuted,fontFamily:fonts.bodyMedium,fontSize:9,marginTop:21},episodeGrid:{flexDirection:'row',flexWrap:'wrap',gap:7},epButton:{width:74,minHeight:40,paddingHorizontal:7,paddingVertical:7,borderRadius:7,backgroundColor:colors.bgCard,borderWidth:1,borderColor:colors.border},epButtonActive:{backgroundColor:colors.accent,borderColor:colors.accent},epNumber:{color:colors.textPrimary,fontFamily:fonts.bodyBold,fontSize:11},epNumberActive:{color:'#fff'},epTitle:{color:colors.textMuted,fontFamily:fonts.body,fontSize:7,marginTop:2},epTitleActive:{color:'rgba(255,255,255,.8)'},about:{marginTop:20,padding:14,borderRadius:radius.md,backgroundColor:colors.bgSurface,borderWidth:1,borderColor:colors.border},aboutText:{color:colors.textSecondary,fontFamily:fonts.body,fontSize:12,lineHeight:18}
 });
