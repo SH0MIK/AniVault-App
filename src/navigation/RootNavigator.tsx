@@ -14,7 +14,6 @@ import UserProfileScreen from '../screens/UserProfileScreen';
 import FollowListScreen from '../screens/FollowListScreen';
 import WatchNowScreen from '../screens/WatchNowScreen';
 import HistoryScreen from '../screens/HistoryScreen';
-import DownloadsScreen from '../screens/DownloadsScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import CharacterScreen from '../screens/CharacterScreen';
 import SeasonalScreen from '../screens/SeasonalScreen';
@@ -36,7 +35,6 @@ export type RootStackParamList = {
   FollowList: { userId: number; type: 'followers' | 'following'; username: string };
   WatchNow: undefined;
   History: undefined;
-  Downloads: undefined;
   Announcements: undefined;
   Character: { id: number };
   Seasonal: undefined;
@@ -64,7 +62,6 @@ export default function RootNavigator() {
         <Stack.Screen name="FollowList" component={FollowListScreen} />
         <Stack.Screen name="WatchNow" component={WatchNowScreen} />
         <Stack.Screen name="History" component={HistoryScreen} />
-        <Stack.Screen name="Downloads" component={DownloadsScreen} />
         <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
         <Stack.Screen name="Character" component={CharacterScreen} />
         <Stack.Screen name="Seasonal" component={SeasonalScreen} />
