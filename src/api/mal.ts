@@ -10,10 +10,15 @@ async function malFetch<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function jikanFetch<T>(path: string): Promise<T> {
+async function jikanFetch<T>(path: string, attempt = 0): Promise<T> {
   const response = await fetch(`${JIKAN_API_BASE}${path}`, {
     headers: { Accept: 'application/json' },
   });
+  if (response.status === 429 && attempt < 2) {
+    // Jikan is rate-limited to a few requests/sec — back off and retry instead of failing the whole page.
+    await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+    return jikanFetch<T>(path, attempt + 1);
+  }
   if (!response.ok) throw new Error(`Jikan API ${response.status}`);
   return response.json() as Promise<T>;
 }
@@ -106,17 +111,72 @@ export async function getMalEpisodes(id: number): Promise<MalEpisode[]> {
 
   const all: MalEpisode[] = [];
   for (let page = 1; page <= 10; page += 1) {
-    const response = await jikanFetch<{ data: JikanEpisode[]; pagination?: { has_next_page?: boolean } }>(`/anime/${encodeURIComponent(String(id))}/episodes?page=${page}`);
-    const items = (response.data ?? []).map((item) => ({
-      id: item.mal_id,
-      number: item.mal_id,
-      title: item.title || undefined,
-      synopsis: item.synopsis || undefined,
-      aired: item.aired || undefined,
-      score: item.score ?? undefined,
-    }));
-    all.push(...items);
-    if (!response.pagination?.has_next_page || items.length === 0) break;
+    try {
+      const response = await jikanFetch<{ data: JikanEpisode[]; pagination?: { has_next_page?: boolean } }>(`/anime/${encodeURIComponent(String(id))}/episodes?page=${page}`);
+      const items = (response.data ?? []).map((item) => ({
+        id: item.mal_id,
+        number: item.mal_id,
+        title: item.title || undefined,
+        synopsis: item.synopsis || undefined,
+        aired: item.aired || undefined,
+        score: item.score ?? undefined,
+      }));
+      all.push(...items);
+      if (!response.pagination?.has_next_page || items.length === 0) break;
+      if (page < 10) await new Promise((resolve) => setTimeout(resolve, 350));
+    } catch {
+      // Keep whatever pages we already have rather than discarding the whole list.
+      break;
+    }
   }
   return all;
+}
+
+export interface MalEpisodeDetail extends MalEpisode {
+  titleJapanese?: string;
+  titleRomanji?: string;
+  duration?: number;
+  filler?: boolean;
+  recap?: boolean;
+}
+
+/**
+ * Jikan's bulk episode-list endpoint never includes synopsis — only its
+ * single-episode endpoint does. Fetch this on demand (e.g. when the user
+ * expands "...more") rather than for every episode in the list.
+ */
+export async function getMalEpisodeDetail(id: number, episodeNum: number): Promise<MalEpisodeDetail | null> {
+  try {
+    const response = await jikanFetch<{
+      data: {
+        mal_id: number;
+        title?: string | null;
+        title_japanese?: string | null;
+        title_romanji?: string | null;
+        aired?: string | null;
+        duration?: number | null;
+        filler?: boolean;
+        recap?: boolean;
+        synopsis?: string | null;
+        score?: number | null;
+      };
+    }>(`/anime/${encodeURIComponent(String(id))}/episodes/${episodeNum}`);
+    const d = response.data;
+    if (!d) return null;
+    return {
+      id: d.mal_id,
+      number: episodeNum,
+      title: d.title || undefined,
+      titleJapanese: d.title_japanese || undefined,
+      titleRomanji: d.title_romanji || undefined,
+      synopsis: d.synopsis || undefined,
+      aired: d.aired || undefined,
+      duration: d.duration ?? undefined,
+      filler: d.filler,
+      recap: d.recap,
+      score: d.score ?? undefined,
+    };
+  } catch {
+    return null;
+  }
 }
