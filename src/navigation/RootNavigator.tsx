@@ -1,14 +1,13 @@
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import MyListScreen from '../screens/MyListScreen';
 import BrowseScreen from '../screens/BrowseScreen';
 import HomeScreen from '../screens/HomeScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import ChatScreen from '../screens/ChatScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 import AnimeDetailScreen from '../screens/AnimeDetailScreen';
 import WatchScreen from '../screens/WatchScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
@@ -18,7 +17,7 @@ import WatchNowScreen from '../screens/WatchNowScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import AnnouncementsScreen from '../screens/AnnouncementsScreen';
 import CharacterScreen from '../screens/CharacterScreen';
-import { colors } from '../theme';
+import { fonts } from '../theme';
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -35,11 +34,9 @@ export type RootStackParamList = {
 
 export type TabParamList = {
   Home: undefined;
-  MyList: undefined;
-  Browse: undefined;
-  Chat: undefined;
-  Notifications: undefined;
-  Profile: undefined;
+  Search: undefined;
+  Schedule: undefined;
+  MySpace: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -48,32 +45,69 @@ const Tab = createBottomTabNavigator<TabParamList>();
 const navTheme = {
   dark: true,
   colors: {
-    primary: colors.accent, background: colors.bgBase, card: colors.bgSurface,
-    text: colors.textPrimary, border: colors.border, notification: colors.accent,
+    primary: '#fff',
+    background: '#000',
+    card: '#08080c',
+    text: '#fff',
+    border: 'rgba(255,255,255,0.08)',
+    notification: '#fff',
   },
 } as const;
+
+type TabIconProps = {
+  name: keyof typeof Ionicons.glyphMap;
+  label: string;
+  focused: boolean;
+};
+
+function TabIcon({ name, label, focused }: TabIconProps) {
+  return (
+    <View style={styles.tabItem}>
+      <Ionicons
+        name={name}
+        size={17}
+        color={focused ? '#fff' : 'rgba(255,255,255,0.42)'}
+      />
+      <Text
+        style={[
+          styles.tabLabel,
+          {
+            color: focused ? '#fff' : 'rgba(255,255,255,0.40)',
+            fontFamily: focused ? fonts.bodyBold : fonts.bodyMedium,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+const TAB_ICONS: Record<keyof TabParamList, { icon: keyof typeof Ionicons.glyphMap; label: string }> = {
+  Home: { icon: 'home', label: 'Home' },
+  Search: { icon: 'search', label: 'Search' },
+  Schedule: { icon: 'calendar-outline', label: 'Schedule' },
+  MySpace: { icon: 'person-outline', label: 'My Space' },
+};
 
 function Tabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.bgSurface, borderTopColor: colors.border },
-        headerStyle: { backgroundColor: colors.bgSurface },
-        headerTintColor: colors.textPrimary,
-        tabBarIcon: ({ color, size }) => {
-          const map: Record<string, string> = { Home: 'home', MyList: 'list', Browse: 'search', Chat: 'chatbubbles', Notifications: 'notifications', Profile: 'person' };
-          return <Ionicons name={(map[route.name] ?? 'ellipse') as any} size={size} color={color} />;
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarIcon: ({ focused }) => {
+          const item = TAB_ICONS[route.name];
+          return <TabIcon name={item.icon} label={item.label} focused={focused} />;
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="MyList" component={MyListScreen} options={{ title: 'My List' }} />
-      <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse', headerShown: false }} />
-      <Tab.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Search" component={BrowseScreen} />
+      <Tab.Screen name="Schedule" component={ScheduleScreen} />
+      <Tab.Screen name="MySpace" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -81,7 +115,13 @@ function Tabs() {
 export default function RootNavigator() {
   return (
     <NavigationContainer theme={navTheme as any}>
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.bgSurface }, headerTintColor: colors.textPrimary }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: '#000' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontFamily: fonts.bodyBold },
+        }}
+      >
         <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
         <Stack.Screen
           name="AnimeDetail"
@@ -90,7 +130,11 @@ export default function RootNavigator() {
         />
         <Stack.Screen name="Watch" component={WatchScreen} options={{ title: 'Watching', headerShown: false }} />
         <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ title: 'Account Settings' }} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({ route }) => ({ title: route.params?.username ?? 'Profile' })} />
+        <Stack.Screen
+          name="UserProfile"
+          component={UserProfileScreen}
+          options={({ route }) => ({ title: route.params?.username ?? 'Profile' })}
+        />
         <Stack.Screen
           name="FollowList"
           component={FollowListScreen}
@@ -104,3 +148,27 @@ export default function RootNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    height: 58,
+    backgroundColor: '#08080c',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    elevation: 0,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  tabBarItem: {
+    justifyContent: 'center',
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  tabLabel: {
+    fontSize: 8,
+    letterSpacing: 0.05,
+  },
+});
