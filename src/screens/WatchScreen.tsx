@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getEpisodeThumbnails, getPlayback, type EpisodeThumbnail, type PlaybackResult } from '../api/content';
-import { getMalAnime, getMalEpisodes, type MalAnime, type MalEpisode } from '../api/mal';
+import { getMalAnime, getMalEpisodes, getMalEpisodeDetail, type MalAnime, type MalEpisode, type MalEpisodeDetail } from '../api/mal';
 import { ANIVAULT_WEB_BASE } from '../api/client';
 import { fonts } from '../theme';
 
@@ -34,6 +34,8 @@ export default function WatchScreen() {
   const [autoPlay, setAutoPlay] = useState(false);
   const [synopsisExpanded, setSynopsisExpanded] = useState(false);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState(0);
+  const [episodeDetail, setEpisodeDetail] = useState<MalEpisodeDetail | null>(null);
+  const [episodeDetailLoading, setEpisodeDetailLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +109,11 @@ export default function WatchScreen() {
     () => episodes.find((item) => Number(item.number) === episode),
     [episodes, episode],
   );
-  const airedLabel = currentEpisodeData?.aired ? String(currentEpisodeData.aired).slice(0, 10) : null;
+  const currentEpisodeDetail = episodeDetail?.number === episode ? episodeDetail : null;
+  const currentEpisodeTitle = currentEpisodeData?.title || currentEpisodeDetail?.title;
+  const currentEpisodeAired = currentEpisodeData?.aired || currentEpisodeDetail?.aired;
+  const currentEpisodeSynopsis = currentEpisodeData?.synopsis || currentEpisodeDetail?.synopsis;
+  const airedLabel = currentEpisodeAired ? String(currentEpisodeAired).slice(0, 10) : null;
 
   useEffect(() => {
     if (!malId) return;
@@ -137,11 +143,30 @@ export default function WatchScreen() {
 
   useEffect(() => {
     setSynopsisExpanded(false);
+    setEpisodeDetail(null);
   }, [episode]);
 
   useEffect(() => {
     setSelectedRangeIndex(Math.floor((episode - 1) / RANGE_SIZE));
   }, [episode]);
+
+  // The bulk episode list never carries synopsis, and can be missing title/aired
+  // for very recently-aired episodes. Fetch the single-episode detail on demand
+  // once the user actually wants to see it, instead of doing this for every row.
+  useEffect(() => {
+    if (!malId) return;
+    const needsDetail = synopsisExpanded ? !currentEpisodeData?.synopsis : (!currentEpisodeData?.title || !currentEpisodeData?.aired);
+    if (!needsDetail) return;
+    if (episodeDetail?.number === episode || episodeDetailLoading) return;
+
+    let cancelled = false;
+    setEpisodeDetailLoading(true);
+    getMalEpisodeDetail(malId, episode)
+      .then((detail) => { if (!cancelled) setEpisodeDetail(detail); })
+      .finally(() => { if (!cancelled) setEpisodeDetailLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [synopsisExpanded, malId, episode, currentEpisodeData?.synopsis, currentEpisodeData?.title, currentEpisodeData?.aired, episodeDetail, episodeDetailLoading]);
 
   const episodeRows = useMemo(() => {
     const byNumber = new Map(episodes.map((item) => [Number(item.number), item]));
@@ -283,6 +308,9 @@ export default function WatchScreen() {
 
       <View style={styles.titleBlock}>
         <Text style={styles.mainTitle} numberOfLines={2}>{title}</Text>
+        {!!currentEpisodeTitle && currentEpisodeTitle !== `Episode ${episode}` && (
+          <Text style={styles.episodeTitleText} numberOfLines={2}>{currentEpisodeTitle}</Text>
+        )}
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>Episode {episode}{airedLabel ? ` • ${airedLabel}` : ''}</Text>
           <Pressable onPress={() => setSynopsisExpanded((v) => !v)} hitSlop={8}>
@@ -291,7 +319,9 @@ export default function WatchScreen() {
         </View>
         {synopsisExpanded && (
           <Text style={styles.episodeSynopsis}>
-            {currentEpisodeData?.synopsis || anime?.synopsis || 'No synopsis available for this episode yet.'}
+            {episodeDetailLoading
+              ? 'Loading synopsis…'
+              : currentEpisodeSynopsis || anime?.synopsis || 'No synopsis available for this episode yet.'}
           </Text>
         )}
       </View>
@@ -349,7 +379,10 @@ export default function WatchScreen() {
         {visibleEpisodeRows.map(({ num, data }) => {
           const image = thumbnails[num] || poster;
           const selected = episode === num;
-          const aired = data?.aired ? String(data.aired).slice(0, 10) : null;
+          const detail = selected ? currentEpisodeDetail : null;
+          const rowTitle = data?.title || detail?.title || `Episode ${num}`;
+          const rowAired = data?.aired || detail?.aired;
+          const aired = rowAired ? String(rowAired).slice(0, 10) : null;
           return (
             <Pressable
               key={num}
@@ -361,7 +394,7 @@ export default function WatchScreen() {
                 <View style={styles.listPlayMark}><Ionicons name="play" size={11} color="#fff" /></View>
               </View>
               <View style={styles.listCopy}>
-                <Text style={styles.listTitle} numberOfLines={2}>{data?.title || `Episode ${num}`}</Text>
+                <Text style={styles.listTitle} numberOfLines={2}>{rowTitle}</Text>
                 <View style={styles.listMetaRow}>
                   <View style={styles.listBadge}><Text style={styles.listBadgeText}>E{num}</Text></View>
                   {aired ? <Text style={styles.listDate}>{aired}</Text> : null}
@@ -413,6 +446,7 @@ const styles = StyleSheet.create({
 
   titleBlock: { paddingHorizontal: 16, paddingTop: 14 },
   mainTitle: { color: '#fff', fontSize: 21, lineHeight: 26, fontWeight: '800', fontFamily: fonts.bodyBold },
+  episodeTitleText: { color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 18, marginTop: 4, fontFamily: fonts.bodyMedium },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   metaText: { color: 'rgba(255,255,255,.5)', fontSize: 12, fontFamily: fonts.body },
   moreLink: { color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '800', marginLeft: 6, fontFamily: fonts.bodySemibold },
