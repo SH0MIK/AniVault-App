@@ -34,10 +34,9 @@ export interface PlaybackResult {
   [key: string]: unknown;
 }
 
-// Use the scraper's documented path form and explicitly mark the MAL id.
-// This avoids ambiguity in the query-param resolver and keeps the source
-// selection separate from AniVault's authenticated website API.
-export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'anikoto'): Promise<PlaybackResult> {
+// AnimeHeaven is the current verified non-Anikoto source on the AniVault scraper.
+// Use the documented path form and explicitly mark the MAL id.
+export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'animeheaven'): Promise<PlaybackResult> {
   const path = `/api/watch/${encodeURIComponent(source)}/mal-${encodeURIComponent(String(malId))}/${encodeURIComponent(String(episode))}/${encodeURIComponent(language)}`;
   return apiFetchScraper<PlaybackResult>(path);
 }
