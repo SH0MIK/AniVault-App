@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, FlatList, TextInput, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { getAnimeDetail, getEpisodes, toggleFavorite, getAnimeCharacters, AnimeDetail, EpisodeItem } from '../api/content';
+import { getAnimeDetail, getEpisodes, getEpisodeThumbnails, toggleFavorite, getAnimeCharacters, AnimeDetail, EpisodeItem } from '../api/content';
 import { addOrUpdateLocal, getLocalEntry, removeLocal } from '../db/listRepo';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, fonts } from '../theme';
@@ -14,6 +14,8 @@ const STATUSES = [
   { key: 'plan_to_watch', label: 'Plan to Watch' }, { key: 'on_hold', label: 'On Hold' }, { key: 'dropped', label: 'Dropped' },
 ];
 
+type EpisodeThumbMap = Record<number, string>;
+
 export default function AnimeDetailScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
@@ -21,6 +23,7 @@ export default function AnimeDetailScreen() {
   const { id } = route.params as { id: number; title?: string };
   const [anime, setAnime] = useState<AnimeDetail | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
+  const [episodeThumbs, setEpisodeThumbs] = useState<EpisodeThumbMap>({});
   const [cast, setCast] = useState<{ id: number; name: string; image: string; role: string }[]>([]);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [myScore, setMyScore] = useState('');
@@ -39,15 +42,32 @@ export default function AnimeDetailScreen() {
   }, [user, id]);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const [detailRes, epRes] = await Promise.all([getAnimeDetail(id), getEpisodes(id)]);
-        setAnime(detailRes.anime); setIsFavorite(!!detailRes.isFavorite); setEpisodes(epRes.data ?? []);
-        getAnimeCharacters(id).then((res) => setCast(res.data)).catch(() => {});
-      } finally { setLoading(false); }
+        const [detailRes, epRes, thumbRes] = await Promise.all([
+          getAnimeDetail(id),
+          getEpisodes(id),
+          getEpisodeThumbnails(id).catch(() => ({ success: false, overrides: [] as { anime_id: number; episode_num: number; image_url: string }[] })),
+        ]);
+        if (cancelled) return;
+        setAnime(detailRes.anime);
+        setIsFavorite(!!detailRes.isFavorite);
+        setEpisodes(epRes.data ?? []);
+        const thumbMap: EpisodeThumbMap = {};
+        for (const item of thumbRes.overrides ?? []) {
+          const ep = Number(item.episode_num);
+          if (ep > 0 && item.image_url) thumbMap[ep] = item.image_url;
+        }
+        setEpisodeThumbs(thumbMap);
+        getAnimeCharacters(id).then((res) => { if (!cancelled) setCast(res.data); }).catch(() => {});
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     refreshLocalStatus();
+    return () => { cancelled = true; };
   }, [id, refreshLocalStatus]);
 
   const setStatus = (status: string) => {
@@ -63,20 +83,28 @@ export default function AnimeDetailScreen() {
     const existing = getLocalEntry(user.id, anime.id);
     const parsed = myScore.trim() ? Math.max(1, Math.min(10, parseInt(myScore, 10) || 0)) : null;
     addOrUpdateLocal(user.id, { anime_id: anime.id, anime_title: anime.title, anime_image: anime.image, status: localStatus, episodes_watched: existing?.episodes_watched ?? 0, score: parsed, review: myReview.trim() || null });
-    setSavingReview(false); refreshLocalStatus();
+    setSavingReview(false);
+    refreshLocalStatus();
   };
 
-  const removeFromList = () => { if (!user || !anime) return; removeLocal(user.id, anime.id); setLocalStatus(null); };
+  const removeFromList = () => {
+    if (!user || !anime) return;
+    removeLocal(user.id, anime.id);
+    setLocalStatus(null);
+  };
 
   const onToggleFavorite = async () => {
     if (!anime || favBusy) return;
-    setFavBusy(true); const prev = isFavorite; setIsFavorite(!prev);
+    setFavBusy(true);
+    const prev = isFavorite;
+    setIsFavorite(!prev);
     try { setIsFavorite((await toggleFavorite(anime.id, anime.title, anime.image)).favorited); }
-    catch { setIsFavorite(prev); } finally { setFavBusy(false); }
+    catch { setIsFavorite(prev); }
+    finally { setFavBusy(false); }
   };
 
   if (loading || !anime) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
-  const firstEpisode = episodes[0]?.episode ?? 1;
+  const firstEpisode = Number(episodes[0]?.mal_id ?? episodes[0]?.episode ?? 1);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -130,14 +158,34 @@ export default function AnimeDetailScreen() {
 
       {cast.length > 0 && <><SectionTitle title="Characters" /><FlatList horizontal data={cast} keyExtractor={(item, i) => `${item.id}-${i}`} showsHorizontalScrollIndicator={false} renderItem={({ item }) => <Pressable style={styles.castCard} onPress={() => item.id && navigation.navigate('Character', { id: item.id })}><Image source={{ uri: item.image }} style={styles.castImage} contentFit="cover" /><Text style={styles.castName} numberOfLines={2}>{item.name}</Text><Text style={styles.castRole} numberOfLines={1}>{item.role}</Text></Pressable>} /></>}
 
-      <SectionTitle title={`Episodes ${episodes.length ? `(${episodes.length})` : ''}`} />
-      <View style={styles.episodeCard}>{episodes.map((item, index) => { const number = item.episode ?? index + 1; return <Pressable key={String(item.mal_id ?? number)} style={styles.episodeRow} onPress={() => navigation.navigate('Watch', { animeId: anime.id, episodeNum: number, title: anime.title })}><View style={styles.episodeNumber}><Text style={styles.episodeNumText}>{number}</Text></View><View style={styles.episodeCopy}><Text style={styles.episodeTitle} numberOfLines={1}>{(item.title as string) || `Episode ${number}`}</Text><Text style={styles.episodeMeta}>{item.title ? `Episode ${number}` : 'Watch episode'}</Text></View><Ionicons name="play-circle-outline" size={23} color={colors.textMuted} /></Pressable>; })}</View>
+      <SectionTitle title={`Episodes ${anime.totalEpisodes ? `(${anime.totalEpisodes})` : episodes.length ? `(${episodes.length})` : ''}`} />
+      <View style={styles.episodeCard}>
+        {episodes.map((item, index) => {
+          const number = Number(item.mal_id ?? item.episode ?? index + 1);
+          const thumb = episodeThumbs[number] || anime.image;
+          return (
+            <Pressable key={`${number}-${item.title ?? index}`} style={styles.episodeRow} onPress={() => navigation.navigate('Watch', { animeId: anime.id, episodeNum: number, title: anime.title })}>
+              <View style={styles.thumbWrap}>
+                <Image source={{ uri: thumb }} style={styles.episodeThumb} contentFit="cover" transition={120} />
+                <View style={styles.thumbNumber}><Text style={styles.thumbNumberText}>{number}</Text></View>
+              </View>
+              <View style={styles.episodeCopy}>
+                <Text style={styles.episodeTitle} numberOfLines={1}>{item.title || `Episode ${number}`}</Text>
+                <Text style={styles.episodeMeta}>{item.title ? `Episode ${number}` : 'Watch episode'}</Text>
+              </View>
+              <Ionicons name="play-circle-outline" size={23} color={colors.textMuted} />
+            </Pressable>
+          );
+        })}
+      </View>
       <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
-function SectionTitle({ title }: { title: string }) { return <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionLine} /></View>; }
+function SectionTitle({ title }: { title: string }) {
+  return <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionLine} /></View>;
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase }, content: { paddingBottom: 20 }, center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
@@ -151,5 +199,9 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginHorizontal: 16 }, statusChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.bgCard, paddingHorizontal: 10, paddingVertical: 8 }, statusActive: { backgroundColor: '#fff', borderColor: '#fff' }, statusText: { color: colors.textSecondary, fontSize: 11, fontFamily: fonts.body }, statusTextActive: { color: '#000', fontFamily: fonts.bodyBold },
   reviewCard: { marginHorizontal: 16, marginTop: 10, flexDirection: 'row', gap: 8 }, scoreInput: { width: 55, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: 8, color: '#fff', textAlign: 'center', fontFamily: fonts.body }, reviewInput: { flex: 1, minHeight: 44, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border, borderRadius: 8, color: '#fff', paddingHorizontal: 12, paddingVertical: 9, fontFamily: fonts.body, fontSize: 12 }, reviewActions: { marginHorizontal: 16, marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 15 }, saveButton: { backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8 }, saveText: { color: '#000', fontSize: 12, fontFamily: fonts.bodyBold }, removeText: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline', fontFamily: fonts.body },
   castCard: { width: 88, marginLeft: 16 }, castImage: { width: 88, height: 112, borderRadius: 9, backgroundColor: colors.bgCard }, castName: { color: colors.textSecondary, fontSize: 10, marginTop: 6, fontFamily: fonts.bodySemibold }, castRole: { color: colors.textMuted, fontSize: 9, marginTop: 2, fontFamily: fonts.body },
-  episodeCard: { marginHorizontal: 16, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.bgCard }, episodeRow: { minHeight: 65, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 11 }, episodeNumber: { width: 34, height: 34, borderRadius: 8, backgroundColor: colors.bgHover, alignItems: 'center', justifyContent: 'center' }, episodeNumText: { color: colors.textPrimary, fontSize: 12, fontFamily: fonts.bodyBold }, episodeCopy: { flex: 1 }, episodeTitle: { color: colors.textSecondary, fontSize: 12, fontFamily: fonts.bodySemibold }, episodeMeta: { color: colors.textMuted, fontSize: 9, marginTop: 3, fontFamily: fonts.body },
+  episodeCard: { marginHorizontal: 16, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.bgCard },
+  episodeRow: { minHeight: 82, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 11 },
+  thumbWrap: { width: 88, height: 52, borderRadius: 7, overflow: 'hidden', backgroundColor: colors.bgHover, position: 'relative' }, episodeThumb: { width: '100%', height: '100%' },
+  thumbNumber: { position: 'absolute', left: 5, bottom: 4, minWidth: 24, height: 20, paddingHorizontal: 5, borderRadius: 5, backgroundColor: 'rgba(0,0,0,0.78)', alignItems: 'center', justifyContent: 'center' }, thumbNumberText: { color: '#fff', fontSize: 10, fontFamily: fonts.bodyBold },
+  episodeCopy: { flex: 1 }, episodeTitle: { color: colors.textSecondary, fontSize: 12, fontFamily: fonts.bodySemibold }, episodeMeta: { color: colors.textMuted, fontSize: 9, marginTop: 3, fontFamily: fonts.body },
 });
