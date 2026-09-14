@@ -15,8 +15,7 @@ async function jikanFetch<T>(path: string): Promise<T> {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) throw new Error(`Jikan API ${response.status}`);
-  const payload = await response.json();
-  return (payload?.data ?? payload) as T;
+  return response.json() as Promise<T>;
 }
 
 export interface MalAnime {
@@ -69,7 +68,8 @@ export async function getMalAnime(id: number): Promise<MalAnime> {
   try {
     return await malFetch<MalAnime>(`/anime/${encodeURIComponent(String(id))}?fields=id,title,main_picture,alternative_titles,synopsis,mean,status,media_type,num_episodes,genres,related_anime`);
   } catch {
-    const data = await jikanFetch<JikanAnime>(`/anime/${encodeURIComponent(String(id))}`);
+    const payload = await jikanFetch<{ data: JikanAnime }>(`/anime/${encodeURIComponent(String(id))}`);
+    const data = payload.data;
     return {
       id: data.mal_id,
       title: data.title,
