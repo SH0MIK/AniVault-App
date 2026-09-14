@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getEpisodeThumbnails, getPlayback, type EpisodeThumbnail, type PlaybackResult } from '../api/content';
 import { getMalAnime, getMalEpisodes, type MalAnime, type MalEpisode } from '../api/mal';
+import { ANIVAULT_WEB_BASE } from '../api/client';
 import { fonts } from '../theme';
+
+const RANGE_SIZE = 50;
 
 export default function WatchScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { width } = useWindowDimensions();
   const { animeId, episodeNum: initialEpisode, title: routeTitle } = route.params as {
     animeId: number;
     episodeNum: number;
@@ -29,6 +31,9 @@ export default function WatchScreen() {
   const [playerLoading, setPlayerLoading] = useState(true);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(false);
+  const [synopsisExpanded, setSynopsisExpanded] = useState(false);
+  const [selectedRangeIndex, setSelectedRangeIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +103,11 @@ export default function WatchScreen() {
   const title = anime?.title || routeTitle || 'Watching';
   const firstThumbnail = thumbnails[1] || Object.values(thumbnails)[0];
   const poster = anime?.main_picture?.large || anime?.main_picture?.medium || firstThumbnail;
+  const currentEpisodeData = useMemo(
+    () => episodes.find((item) => Number(item.number) === episode),
+    [episodes, episode],
+  );
+  const airedLabel = currentEpisodeData?.aired ? String(currentEpisodeData.aired).slice(0, 10) : null;
 
   useEffect(() => {
     if (!malId) return;
@@ -125,6 +135,14 @@ export default function WatchScreen() {
     return () => { cancelled = true; };
   }, [malId, episode, language, retryNonce]);
 
+  useEffect(() => {
+    setSynopsisExpanded(false);
+  }, [episode]);
+
+  useEffect(() => {
+    setSelectedRangeIndex(Math.floor((episode - 1) / RANGE_SIZE));
+  }, [episode]);
+
   const episodeRows = useMemo(() => {
     const byNumber = new Map(episodes.map((item) => [Number(item.number), item]));
     return Array.from({ length: totalEpisodes }, (_, index) => ({
@@ -133,10 +151,45 @@ export default function WatchScreen() {
     }));
   }, [episodes, totalEpisodes]);
 
+  const ranges = useMemo(() => {
+    const count = Math.max(1, Math.ceil(totalEpisodes / RANGE_SIZE));
+    return Array.from({ length: count }, (_, i) => ({
+      start: i * RANGE_SIZE + 1,
+      end: Math.min((i + 1) * RANGE_SIZE, totalEpisodes),
+    }));
+  }, [totalEpisodes]);
+
+  const activeRangeIndex = Math.min(selectedRangeIndex, ranges.length - 1);
+  const visibleEpisodeRows = useMemo(() => {
+    const r = ranges[activeRangeIndex] || ranges[0];
+    return episodeRows.slice(r.start - 1, r.end);
+  }, [episodeRows, ranges, activeRangeIndex]);
+
   const directUrl = playback?.hlsProxyUrl || playback?.m3u8 || playback?.videoUrl || playback?.streamUrl || playback?.url || null;
   const isHls = Boolean(directUrl && (playback?.hlsProxyUrl || playback?.m3u8 || directUrl.includes('.m3u8')));
   const selectEpisode = (next: number) => {
     if (next >= 1 && next <= totalEpisodes) setEpisode(next);
+  };
+
+  const onShare = async () => {
+    try {
+      await Share.share({
+        message: `Watch ${title} - Episode ${episode} on AniVault\n${ANIVAULT_WEB_BASE}/pages/watch.php?id=${malId}&ep=${episode}`,
+      });
+    } catch {
+      // user dismissed the share sheet — nothing to do
+    }
+  };
+
+  const onDownload = (num: number) => {
+    if (num === episode && directUrl) {
+      Linking.openURL(directUrl).catch(() => {
+        Alert.alert('Download unavailable', 'Could not open a download link for this episode.');
+      });
+      return;
+    }
+    selectEpisode(num);
+    Alert.alert('Preparing episode', `Loading episode ${num}. Tap download again once it starts playing.`);
   };
 
   const playerHtml = useMemo(() => {
@@ -153,7 +206,7 @@ export default function WatchScreen() {
       ? `if(window.Hls&&Hls.isSupported()){const h=new Hls({enableWorker:true,lowLatencyMode:false});h.on(Hls.Events.MANIFEST_PARSED,()=>{ready();v.play().catch(()=>{})});h.on(Hls.Events.ERROR,(e,d)=>{if(d&&d.fatal)fail(d)});h.loadSource(src);h.attachMedia(v)}else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=src;v.addEventListener('loadedmetadata',()=>{ready();v.play().catch(()=>{})})}else fail({message:'HLS is not supported on this device'})`
       : `v.addEventListener('loadedmetadata',ready);v.addEventListener('canplay',ready)`;
 
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;background:#000;object-fit:contain}</style></head><body><video id="v" controls playsinline webkit-playsinline preload="auto"${isHls ? '' : ` src="${htmlUrl}"`}></video>${hlsScript}<script>(function(){const v=document.getElementById('v'),src=${jsUrl};function post(m){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(m)}function ready(){post('READY')}function fail(e){post('ERROR:'+((e&&e.message)||'Playback failed'))}v.addEventListener('error',()=>fail(v.error));${setup}})();</script></body></html>`;
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;background:#000;object-fit:contain}</style></head><body><video id="v" controls playsinline webkit-playsinline preload="auto"${isHls ? '' : ` src="${htmlUrl}"`}></video>${hlsScript}<script>(function(){const v=document.getElementById('v'),src=${jsUrl};function post(m){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(m)}function ready(){post('READY')}function fail(e){post('ERROR:'+((e&&e.message)||'Playback failed'))}v.addEventListener('error',()=>fail(v.error));v.addEventListener('ended',()=>post('ENDED'));${setup}})();</script></body></html>`;
   }, [directUrl, playback?.embedUrl, isHls]);
 
   const onWebMessage = (event: WebViewMessageEvent) => {
@@ -166,12 +219,10 @@ export default function WatchScreen() {
       setPlayerLoading(false);
       setPlayerError(message.slice(6) || 'Playback failed.');
     }
+    if (message === 'ENDED' && autoPlay) {
+      selectEpisode(episode + 1);
+    }
   };
-
-  const columns = width >= 700 ? 5 : 4;
-  const horizontalPadding = 16;
-  const gap = 8;
-  const cardWidth = Math.floor((width - horizontalPadding * 2 - gap * (columns - 1)) / columns);
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator color="#fff" /><Text style={styles.loadingText}>Loading…</Text></View>;
@@ -230,60 +281,95 @@ export default function WatchScreen() {
         )}
       </View>
 
-      <View style={styles.episodeBar}>
-        <Pressable disabled={episode <= 1} onPress={() => selectEpisode(episode - 1)} style={[styles.navButton, episode <= 1 && styles.disabled]}>
-          <Ionicons name="chevron-back" size={15} color="#fff" />
-          <Text style={styles.navText}>PREV</Text>
-        </Pressable>
-        <View style={styles.currentEpisode}>
-          <Text style={styles.currentLabel}>EP</Text>
-          <Text style={styles.currentNumber}>{episode}</Text>
+      <View style={styles.titleBlock}>
+        <Text style={styles.mainTitle} numberOfLines={2}>{title}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.metaText}>Episode {episode}{airedLabel ? ` • ${airedLabel}` : ''}</Text>
+          <Pressable onPress={() => setSynopsisExpanded((v) => !v)} hitSlop={8}>
+            <Text style={styles.moreLink}>{synopsisExpanded ? 'less' : '...more'}</Text>
+          </Pressable>
         </View>
-        <Pressable disabled={episode >= totalEpisodes} onPress={() => selectEpisode(episode + 1)} style={[styles.navButton, episode >= totalEpisodes && styles.disabled]}>
-          <Text style={styles.navText}>NEXT</Text>
-          <Ionicons name="chevron-forward" size={15} color="#fff" />
-        </Pressable>
-        <Pressable onPress={() => selectEpisode(totalEpisodes)} style={styles.latest}>
-          <Text style={styles.navText}>LATEST</Text>
-        </Pressable>
+        {synopsisExpanded && (
+          <Text style={styles.episodeSynopsis}>
+            {currentEpisodeData?.synopsis || anime?.synopsis || 'No synopsis available for this episode yet.'}
+          </Text>
+        )}
       </View>
 
-      <View style={styles.languageBox}>
-        <Pressable onPress={() => setLanguage('sub')} style={[styles.languageButton, language === 'sub' && styles.languageSelected]}>
-          <Ionicons name="chatbubble-outline" size={15} color={language === 'sub' ? '#000' : '#888'} />
-          <Text style={[styles.languageText, language === 'sub' && styles.languageSelectedText]}>SUBTITLED</Text>
-        </Pressable>
-        <Pressable onPress={() => setLanguage('dub')} style={[styles.languageButton, language === 'dub' && styles.languageSelected]}>
-          <Ionicons name="volume-high-outline" size={15} color={language === 'dub' ? '#000' : '#888'} />
-          <Text style={[styles.languageText, language === 'dub' && styles.languageSelectedText]}>DUBBED</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.infoRow}>
-        {poster ? <Image source={{ uri: poster }} style={styles.miniPoster} contentFit="cover" /> : <View style={styles.miniPosterFallback} />}
-        <View style={styles.infoCopy}>
-          <Text style={styles.infoTitle} numberOfLines={2}>{title}</Text>
-          <Text style={styles.infoMeta}>{anime?.media_type?.toUpperCase() || 'ANIME'} · {totalEpisodes} EPISODES{anime?.mean ? ` · ★ ${anime.mean.toFixed(1)}` : ''}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRow}>
+        <View style={styles.langGroup}>
+          <Pressable onPress={() => setLanguage('sub')} style={[styles.langPill, language === 'sub' && styles.langPillActive]}>
+            <Text style={[styles.langPillText, language === 'sub' && styles.langPillTextActive]}>SUB</Text>
+          </Pressable>
+          <Pressable onPress={() => setLanguage('dub')} style={[styles.langPill, language === 'dub' && styles.langPillActive]}>
+            <Text style={[styles.langPillText, language === 'dub' && styles.langPillTextActive]}>DUB</Text>
+          </Pressable>
         </View>
-      </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>EPISODES</Text>
-        <View style={styles.sectionLine} />
-        <Text style={styles.sectionCount}>{totalEpisodes}</Text>
-      </View>
+        <Pressable onPress={() => setAutoPlay((v) => !v)} style={[styles.actionPill, autoPlay && styles.actionPillActive]}>
+          <Ionicons name={autoPlay ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={autoPlay ? '#000' : 'rgba(255,255,255,.75)'} />
+          <Text style={[styles.actionPillText, autoPlay && styles.actionPillTextActive]}>AutoPlay</Text>
+        </Pressable>
 
-      <View style={styles.episodeGrid}>
-        {episodeRows.map(({ num, data }) => {
+        <Pressable
+          onPress={() => selectEpisode(episode + 1)}
+          disabled={episode >= totalEpisodes}
+          style={[styles.actionPill, episode >= totalEpisodes && styles.disabled]}
+        >
+          <Ionicons name="play" size={13} color="rgba(255,255,255,.75)" />
+          <Text style={styles.actionPillText}>Next</Text>
+        </Pressable>
+
+        <Pressable onPress={onShare} style={styles.actionPill}>
+          <Ionicons name="share-social-outline" size={14} color="rgba(255,255,255,.75)" />
+          <Text style={styles.actionPillText}>Share</Text>
+        </Pressable>
+
+        <Pressable onPress={() => onDownload(episode)} style={styles.actionPill}>
+          <Ionicons name="download-outline" size={15} color="rgba(255,255,255,.75)" />
+          <Text style={styles.actionPillText}>Download</Text>
+        </Pressable>
+      </ScrollView>
+
+      {ranges.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rangeRow}>
+          {ranges.map((r, idx) => (
+            <Pressable
+              key={`${r.start}-${r.end}`}
+              onPress={() => setSelectedRangeIndex(idx)}
+              style={[styles.rangePill, idx === activeRangeIndex && styles.rangePillActive]}
+            >
+              <Text style={[styles.rangePillText, idx === activeRangeIndex && styles.rangePillTextActive]}>{r.start}-{r.end}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      <View style={styles.episodeList}>
+        {visibleEpisodeRows.map(({ num, data }) => {
           const image = thumbnails[num] || poster;
           const selected = episode === num;
+          const aired = data?.aired ? String(data.aired).slice(0, 10) : null;
           return (
-            <Pressable key={num} onPress={() => selectEpisode(num)} style={[styles.episodeCard, { width: cardWidth }, selected && styles.episodeCardSelected]}>
-              {image ? <Image source={{ uri: image }} style={styles.episodeImage} contentFit="cover" /> : <View style={styles.episodeImageFallback} />}
-              <View style={styles.cardShade} />
-              <View style={styles.epNumber}><Text style={styles.epNumberText}>{num}</Text></View>
-              {selected && <View style={styles.playMark}><Ionicons name="play" size={9} color="#000" /></View>}
-              {data?.title ? <Text style={styles.epTitle} numberOfLines={1}>{data.title}</Text> : null}
+            <Pressable
+              key={num}
+              onPress={() => selectEpisode(num)}
+              style={[styles.episodeListRow, selected && styles.episodeListRowActive]}
+            >
+              <View style={styles.listThumbWrap}>
+                {image ? <Image source={{ uri: image }} style={styles.listThumb} contentFit="cover" /> : <View style={styles.listThumbFallback} />}
+                <View style={styles.listPlayMark}><Ionicons name="play" size={11} color="#fff" /></View>
+              </View>
+              <View style={styles.listCopy}>
+                <Text style={styles.listTitle} numberOfLines={2}>{data?.title || `Episode ${num}`}</Text>
+                <View style={styles.listMetaRow}>
+                  <View style={styles.listBadge}><Text style={styles.listBadgeText}>E{num}</Text></View>
+                  {aired ? <Text style={styles.listDate}>{aired}</Text> : null}
+                </View>
+              </View>
+              <Pressable onPress={() => onDownload(num)} hitSlop={10} style={styles.listDownload}>
+                <Ionicons name="download-outline" size={18} color="rgba(255,255,255,.4)" />
+              </Pressable>
             </Pressable>
           );
         })}
@@ -324,39 +410,48 @@ const styles = StyleSheet.create({
   errorText: { color: 'rgba(255,255,255,.48)', fontSize: 9, textAlign: 'center', marginTop: 6 },
   retryButton: { height: 32, paddingHorizontal: 14, borderRadius: 7, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', marginTop: 13 },
   retryText: { color: '#000', fontSize: 9, fontWeight: '900', marginLeft: 6 },
-  episodeBar: { paddingHorizontal: 16, paddingTop: 11, flexDirection: 'row', alignItems: 'center' },
-  navButton: { height: 34, minWidth: 88, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#101014', borderWidth: 1, borderColor: 'rgba(255,255,255,.07)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  navText: { color: '#fff', fontSize: 8, fontWeight: '900', letterSpacing: .5 },
-  disabled: { opacity: .28 },
-  currentEpisode: { height: 34, minWidth: 58, borderRadius: 8, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginHorizontal: 6 },
-  currentLabel: { color: '#777', fontSize: 8, fontWeight: '800', marginRight: 4 },
-  currentNumber: { color: '#000', fontSize: 14, fontWeight: '900' },
-  latest: { height: 34, minWidth: 98, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#101014', borderWidth: 1, borderColor: 'rgba(255,255,255,.07)', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  languageBox: { marginHorizontal: 16, marginTop: 14, height: 70, padding: 5, borderRadius: 16, backgroundColor: '#0a0a0e', borderWidth: 1, borderColor: 'rgba(255,255,255,.08)', flexDirection: 'row' },
-  languageButton: { flex: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
-  languageSelected: { backgroundColor: '#fff' },
-  languageText: { color: '#777', fontSize: 10, fontWeight: '900', marginLeft: 8, letterSpacing: .3 },
-  languageSelectedText: { color: '#000' },
-  infoRow: { marginHorizontal: 16, marginTop: 30, minHeight: 120, borderRadius: 17, backgroundColor: '#08080b', borderWidth: 1, borderColor: 'rgba(255,255,255,.09)', padding: 16, flexDirection: 'row', alignItems: 'center' },
-  miniPoster: { width: 86, height: 86, borderRadius: 10, backgroundColor: '#15151a' },
-  miniPosterFallback: { width: 86, height: 86, borderRadius: 10, backgroundColor: '#15151a' },
-  infoCopy: { flex: 1, marginLeft: 16 },
-  infoTitle: { color: '#fff', fontSize: 16, lineHeight: 22, fontWeight: '800', fontFamily: fonts.bodyBold },
-  infoMeta: { color: 'rgba(255,255,255,.38)', fontSize: 9, marginTop: 10, letterSpacing: .7, fontWeight: '700' },
-  sectionHeader: { marginHorizontal: 16, marginTop: 28, flexDirection: 'row', alignItems: 'center' },
+
+  titleBlock: { paddingHorizontal: 16, paddingTop: 14 },
+  mainTitle: { color: '#fff', fontSize: 21, lineHeight: 26, fontWeight: '800', fontFamily: fonts.bodyBold },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  metaText: { color: 'rgba(255,255,255,.5)', fontSize: 12, fontFamily: fonts.body },
+  moreLink: { color: 'rgba(255,255,255,.85)', fontSize: 12, fontWeight: '800', marginLeft: 6, fontFamily: fonts.bodySemibold },
+  episodeSynopsis: { color: 'rgba(255,255,255,.55)', fontSize: 12, lineHeight: 18, marginTop: 10 },
+
+  actionRow: { paddingHorizontal: 16, paddingTop: 14, alignItems: 'center', gap: 8 },
+  langGroup: { flexDirection: 'row', backgroundColor: '#101014', borderRadius: 20, padding: 3, marginRight: 2 },
+  langPill: { height: 32, paddingHorizontal: 16, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  langPillActive: { backgroundColor: '#fff' },
+  langPillText: { color: 'rgba(255,255,255,.55)', fontSize: 11, fontWeight: '900', letterSpacing: .3 },
+  langPillTextActive: { color: '#000' },
+  actionPill: { height: 38, paddingHorizontal: 14, borderRadius: 19, backgroundColor: '#101014', borderWidth: 1, borderColor: 'rgba(255,255,255,.07)', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  actionPillActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  actionPillText: { color: 'rgba(255,255,255,.75)', fontSize: 11, fontWeight: '800' },
+  actionPillTextActive: { color: '#000' },
+  disabled: { opacity: .35 },
+
+  rangeRow: { paddingHorizontal: 16, paddingTop: 14, alignItems: 'center', gap: 8 },
+  rangePill: { height: 34, paddingHorizontal: 16, borderRadius: 17, backgroundColor: '#101014', borderWidth: 1, borderColor: 'rgba(255,255,255,.07)', alignItems: 'center', justifyContent: 'center' },
+  rangePillActive: { backgroundColor: 'transparent', borderColor: '#fff', borderWidth: 1.5 },
+  rangePillText: { color: 'rgba(255,255,255,.6)', fontSize: 12, fontWeight: '800' },
+  rangePillTextActive: { color: '#fff' },
+
+  episodeList: { marginTop: 16 },
+  episodeListRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,.06)' },
+  episodeListRowActive: { backgroundColor: 'rgba(255,255,255,.05)' },
+  listThumbWrap: { width: 100, height: 100, borderRadius: 9, overflow: 'hidden', backgroundColor: '#15151a', position: 'relative' },
+  listThumb: { width: '100%', height: '100%' },
+  listThumbFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: '#15151a' },
+  listPlayMark: { position: 'absolute', left: 7, bottom: 7 },
+  listCopy: { flex: 1 },
+  listTitle: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '700', fontFamily: fonts.bodySemibold },
+  listMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
+  listBadge: { height: 20, paddingHorizontal: 7, borderRadius: 5, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center' },
+  listBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  listDate: { color: 'rgba(255,255,255,.4)', fontSize: 11, fontFamily: fonts.body },
+  listDownload: { paddingLeft: 4 },
+
   sectionTitle: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: .8 },
-  sectionLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,.1)', marginHorizontal: 10 },
-  sectionCount: { color: 'rgba(255,255,255,.35)', fontSize: 11, fontWeight: '800' },
-  episodeGrid: { marginHorizontal: 16, marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
-  episodeCard: { height: 78, marginRight: 8, marginBottom: 10, borderRadius: 9, overflow: 'hidden', backgroundColor: '#101014', borderWidth: 1, borderColor: 'rgba(255,255,255,.06)' },
-  episodeCardSelected: { borderColor: 'rgba(255,255,255,.75)' },
-  episodeImage: { ...StyleSheet.absoluteFillObject, width: undefined, height: undefined },
-  episodeImageFallback: { ...StyleSheet.absoluteFillObject, backgroundColor: '#15151a' },
-  cardShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.32)' },
-  epNumber: { position: 'absolute', left: 7, top: 7, minWidth: 23, height: 20, paddingHorizontal: 5, borderRadius: 5, backgroundColor: 'rgba(0,0,0,.7)', alignItems: 'center', justifyContent: 'center' },
-  epNumberText: { color: '#fff', fontSize: 9, fontWeight: '900' },
-  playMark: { position: 'absolute', right: 7, top: 7, width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  epTitle: { position: 'absolute', left: 7, right: 7, bottom: 6, color: '#fff', fontSize: 8, fontWeight: '800' },
-  about: { marginHorizontal: 16, marginTop: 25, paddingTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.08)' },
+  about: { marginHorizontal: 16, marginTop: 22, paddingTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.08)' },
   synopsis: { color: 'rgba(255,255,255,.5)', fontSize: 11, lineHeight: 18, marginTop: 10 },
 });
