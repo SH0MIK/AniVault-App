@@ -94,20 +94,38 @@ export default function WatchScreen() {
 
   const playerHtml = useMemo(() => {
     if (!directUrl && !playback?.embedUrl) return '';
-    if (!directUrl && playback?.embedUrl) return `<!doctype html><html><body style="margin:0;background:#000;overflow:hidden"><iframe src="${escapeHtml(playback.embedUrl)}" style="width:100vw;height:100vh;border:0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe></body></html>`;
-    const safeUrl = escapeHtml(directUrl!);
+    if (!directUrl && playback?.embedUrl) {
+      const iframeUrl = escapeHtml(playback.embedUrl);
+      return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"></head><body style="margin:0;background:#000;overflow:hidden"><iframe src="${iframeUrl}" style="width:100vw;height:100vh;border:0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe></body></html>`;
+    }
+
+    // IMPORTANT: URLs are HTML-escaped only when inserted into an HTML
+    // attribute. For JavaScript strings (especially HLS URLs with query
+    // parameters), use JSON.stringify so '&' is not turned into '&amp;'.
+    const htmlUrl = escapeHtml(directUrl!);
+    const jsUrl = JSON.stringify(directUrl);
     const hls = isHls;
+
     return `<!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;background:#000;object-fit:contain}</style></head>
-<body><video id="v" controls playsinline webkit-playsinline preload="auto"${hls ? '' : ` src="${safeUrl}"`}></video>
+<body><video id="v" controls playsinline webkit-playsinline preload="auto"${hls ? '' : ` src="${htmlUrl}"`}></video>
 ${hls ? '<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js"></script>' : ''}
 <script>
 (function(){
  const v=document.getElementById('v');
- function ready(){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('READY');}
- function fail(e){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ERROR:'+((e&&e.message)||'Playback failed'));}
+ const src=${jsUrl};
+ function post(message){if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(message);}}
+ function ready(){post('READY');}
+ function fail(e){post('ERROR:'+((e&&e.message)||'Playback failed'));}
  v.addEventListener('canplay',ready); v.addEventListener('playing',ready); v.addEventListener('error',()=>fail(v.error));
- ${hls ? `if(window.Hls&&Hls.isSupported()){const h=new Hls({enableWorker:true});h.on(Hls.Events.MANIFEST_PARSED,()=>{ready();v.play().catch(()=>{});});h.on(Hls.Events.ERROR,(e,d)=>{if(d&&d.fatal){fail(d);}});h.loadSource("${safeUrl}");h.attachMedia(v);}else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src="${safeUrl}";v.addEventListener('loadedmetadata',()=>{ready();v.play().catch(()=>{});});}else{fail({message:'HLS is not supported on this device'});}` : `v.addEventListener('loadedmetadata',ready);`}
+ ${hls ? `if(window.Hls&&Hls.isSupported()){
+   const h=new Hls({enableWorker:true});
+   h.on(Hls.Events.MANIFEST_PARSED,()=>{ready();v.play().catch(()=>{});});
+   h.on(Hls.Events.ERROR,(e,d)=>{if(d&&d.fatal){fail(d);}});
+   h.loadSource(src); h.attachMedia(v);
+ }else if(v.canPlayType('application/vnd.apple.mpegurl')){
+   v.src=src; v.addEventListener('loadedmetadata',()=>{ready();v.play().catch(()=>{});});
+ }else{fail({message:'HLS is not supported on this device'});}` : `v.addEventListener('loadedmetadata',ready);`}
 })();
 </script></body></html>`;
   }, [directUrl, playback?.embedUrl, isHls]);
@@ -150,7 +168,7 @@ ${hls ? '<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js"
               <Ionicons name="alert-circle-outline" size={24} color="#fff" />
               <Text style={styles.playerErrorTitle}>STREAM UNAVAILABLE</Text>
               <Text style={styles.playerErrorText}>{playerError}</Text>
-              <Pressable onPress={() => selectEpisode(episode)} style={styles.retryButton}>
+              <Pressable onPress={() => { setEpisode((value) => value); }} style={styles.retryButton}>
                 <Ionicons name="refresh" size={14} color="#000" />
                 <Text style={styles.retryText}>RETRY</Text>
               </Pressable>
