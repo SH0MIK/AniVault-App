@@ -11,8 +11,17 @@ export function browse(opts: { q?: string; genres?: number[]; status?: string; p
 }
 export interface AnimeDetail { id: number; title: string; titleJapanese: string | null; image: string; synopsis: string; score: number | null; status: string; type: string; genres: { id: number; name: string }[]; totalEpisodes: number; airedSoFar: number | null; isAiring: boolean; dubbedLangs: string[]; related: { id: number; title: string; type: string }[]; }
 export function getAnimeDetail(id: number): Promise<{ success: boolean; anime: AnimeDetail; userEntry: any; isFavorite: boolean }> { return apiFetch(`/api/mobile/anime/${id}`); }
-export interface EpisodeItem { mal_id?: number; episode?: number; title?: string; [key: string]: unknown; }
+export interface EpisodeItem { mal_id?: number; episode?: number; title?: string; aired?: string | null; score?: number | null; filler?: boolean; recap?: boolean; [key: string]: unknown; }
 export function getEpisodes(id: number, page = 1): Promise<{ success: boolean; data: EpisodeItem[]; pagination: any }> { return apiFetch(`/api/mobile/anime/${id}/episodes?page=${page}`); }
+
+// The website resolves episode thumbnails through this endpoint. It combines
+// admin overrides with the same AniVault scraper-backed thumbnail lookup, so
+// the mobile app uses the exact same episode artwork as anivault.co.
+export interface EpisodeThumbnail { anime_id: number; episode_num: number; image_url: string; }
+export function getEpisodeThumbnails(id: number): Promise<{ success: boolean; overrides: EpisodeThumbnail[]; total_eps?: number }> {
+  return apiFetch(`/api/episode_override.php?anime_id=${id}&all=1`);
+}
+
 export function toggleFavorite(animeId: number, title: string, image: string): Promise<{ success: boolean; favorited: boolean }> { return apiFetchForm('/api/list.php', { action: 'favorite', anime_id: String(animeId), anime_title: title, anime_image: image }); }
 export interface MiniAnimeCard { id: number; title: string; image: string; score: number | null; type: string; episodes: number; }
 export interface HomeContinueItem { animeId: number; title: string; image: string; episodeNum: number; epTitle: string | null; epThumb: string | null; watchTime: number; episodeDuration: number; }
