@@ -1,8 +1,7 @@
-import { apiFetch, apiFetchForm } from './client';
+import { apiFetch, apiFetchForm, apiFetchScraper } from './client';
 
 // The website mobile endpoints remain the source for authenticated AniVault
-// catalog/list/history data. Streaming-specific calls can use apiFetchScraper
-// from client.ts when a screen needs the scraper's native response shape.
+// catalog/list/history data. Streaming-specific calls use the scraper API.
 export interface BrowseItem {
   id: number; title: string; image: string; score: number | null; type: string; episodes: number;
   airedInfo: { aired: number; total: number | null } | null; dubbedLangs: string[]; userStatus: string | null;
@@ -19,6 +18,25 @@ export function getEpisodes(id: number, page = 1): Promise<{ success: boolean; d
 export interface EpisodeThumbnail { anime_id: number; episode_num: number; image_url: string; }
 export function getEpisodeThumbnails(id: number): Promise<{ success: boolean; overrides: EpisodeThumbnail[]; total_eps?: number }> {
   return apiFetch(`/api/episode_override.php?anime_id=${id}&all=1`);
+}
+
+export interface PlaybackResult {
+  embedUrl?: string;
+  m3u8?: string;
+  hlsProxyUrl?: string;
+  playbackMode?: 'hls' | 'mp4' | 'embed' | string;
+  videoUrl?: string;
+  streamUrl?: string;
+  url?: string;
+  subtitles?: Array<{ url?: string; src?: string; label?: string; lang?: string; [key: string]: unknown }>;
+  server?: string;
+  availableServers?: Array<{ name?: string; server?: string; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+
+export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'anikoto'): Promise<PlaybackResult> {
+  const params = new URLSearchParams({ source, malId: String(malId), ep: String(episode), type: language });
+  return apiFetchScraper<PlaybackResult>(`/api/watch?${params.toString()}`);
 }
 
 export function toggleFavorite(animeId: number, title: string, image: string): Promise<{ success: boolean; favorited: boolean }> { return apiFetchForm('/api/list.php', { action: 'favorite', anime_id: String(animeId), anime_title: title, anime_image: image }); }
