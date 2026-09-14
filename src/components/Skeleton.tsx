@@ -1,0 +1,6 @@
+import React,{useEffect,useRef}from'react';import{View,StyleSheet,Animated,ViewStyle}from'react-native';
+import{colors}from'../theme';
+export default function Skeleton({width,height,borderRadius=8,style}:{width:number|string;height:number;borderRadius?:number;style?:ViewStyle}){const o=useRef(new Animated.Value(.45)).current;useEffect(()=>{const a=Animated.loop(Animated.sequence([Animated.timing(o,{toValue:.9,duration:650,useNativeDriver:true}),Animated.timing(o,{toValue:.45,duration:650,useNativeDriver:true})]));a.start();return()=>a.stop()},[]);return <Animated.View style={[styles.base,{width,height,borderRadius,opacity:o},style]}/>}
+export function PosterSkeleton({width=112}:{width?:number}){return <View style={{width}}><Skeleton width={width} height={width*1.43}/><Skeleton width={width*.9} height={12} style={{marginTop:7}}/><Skeleton width={width*.55} height={9} style={{marginTop:5}}/></View>}
+export function RowSkeleton({count=5,width=112}:{count?:number;width?:number}){return <View style={styles.row}>{Array.from({length:count},(_,i)=><PosterSkeleton key={i} width={width}/>)}</View>}
+const styles=StyleSheet.create({base:{backgroundColor:colors.bgHover},row:{flexDirection:'row',gap:12,paddingHorizontal:20}});
