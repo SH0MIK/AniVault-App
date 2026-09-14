@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import BrowseScreen from '../screens/BrowseScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 import AnimeDetailScreen from '../screens/AnimeDetailScreen';
 import WatchScreen from '../screens/WatchScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
@@ -26,15 +27,13 @@ export type TabParamList = { Home: undefined; Search: undefined; Schedule: undef
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 const navTheme = { dark: true, colors: { primary: '#fff', background: '#000', card: '#08080c', text: '#fff', border: 'rgba(255,255,255,0.08)', notification: '#fff' } } as const;
-function ScheduleTab() { return <WatchNowScreen />; }
-function MySpaceTab() { return <ProfileScreen />; }
 function TabIcon({ name, label, focused }: { name: keyof typeof Ionicons.glyphMap; label: string; focused: boolean }) { return <View style={styles.tabItem}><Ionicons name={name} size={17} color={focused ? '#fff' : 'rgba(255,255,255,0.42)'} /><Text style={[styles.tabLabel, { color: focused ? '#fff' : 'rgba(255,255,255,0.40)', fontFamily: focused ? fonts.bodyBold : fonts.bodyMedium }]}>{label}</Text></View>; }
 function Tabs() {
   return <Tab.Navigator screenOptions={({ route }) => ({ headerShown: false, tabBarShowLabel: false, tabBarStyle: styles.tabBar, tabBarItemStyle: styles.tabBarItem, tabBarIcon: ({ focused }) => {
     const map: Record<string, { icon: keyof typeof Ionicons.glyphMap; label: string }> = { Home: { icon: 'home', label: 'Home' }, Search: { icon: 'search', label: 'Search' }, Schedule: { icon: 'calendar-outline', label: 'Schedule' }, MySpace: { icon: 'person-outline', label: 'My Space' } };
     const item = map[route.name]; return <TabIcon name={item.icon} label={item.label} focused={focused} />;
   })}>
-    <Tab.Screen name="Home" component={HomeScreen} /><Tab.Screen name="Search" component={BrowseScreen} /><Tab.Screen name="Schedule" component={ScheduleTab} /><Tab.Screen name="MySpace" component={MySpaceTab} />
+    <Tab.Screen name="Home" component={HomeScreen} /><Tab.Screen name="Search" component={BrowseScreen} /><Tab.Screen name="Schedule" component={ScheduleScreen} /><Tab.Screen name="MySpace" component={ProfileScreen} />
   </Tab.Navigator>;
 }
 export default function RootNavigator() {
