@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Video, ResizeMode, type AVPlaybackStatus } from 'expo-av';
-import { WebView } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -58,15 +57,12 @@ export default function WatchScreen() {
     setPlayback(null);
     setPlayerLoading(true);
     setPlayerError(null);
-
     (async () => {
       try {
         const result = await getPlayback(malId, episode, language);
         if (cancelled) return;
-        const directUrl = result.hlsProxyUrl || result.m3u8 || result.videoUrl || result.streamUrl || result.url;
-        if (!directUrl && !result.embedUrl) {
-          throw new Error('The scraper did not return a playable stream.');
-        }
+        const playable = result.hlsProxyUrl || result.m3u8 || result.videoUrl || result.streamUrl || result.url || result.embedUrl;
+        if (!playable) throw new Error('The scraper did not return a playable stream.');
         setPlayback(result);
       } catch (error: any) {
         if (cancelled) return;
@@ -75,7 +71,6 @@ export default function WatchScreen() {
         setPlayerLoading(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, [anime, malId, episode, language]);
 
@@ -97,13 +92,32 @@ export default function WatchScreen() {
     setEpisode(next);
   };
 
-  const onPlaybackStatus = (status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
+  const playerHtml = useMemo(() => {
+    if (!directUrl && !playback?.embedUrl) return '';
+    if (!directUrl && playback?.embedUrl) return `<!doctype html><html><body style="margin:0;background:#000;overflow:hidden"><iframe src="${escapeHtml(playback.embedUrl)}" style="width:100vw;height:100vh;border:0" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe></body></html>`;
+    const safeUrl = escapeHtml(directUrl!);
+    const hls = isHls;
+    return `<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;background:#000;object-fit:contain}</style></head>
+<body><video id="v" controls playsinline webkit-playsinline preload="auto"${hls ? '' : ` src="${safeUrl}"`}></video>
+${hls ? '<script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js"></script>' : ''}
+<script>
+(function(){
+ const v=document.getElementById('v');
+ function ready(){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('READY');}
+ function fail(e){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('ERROR:'+((e&&e.message)||'Playback failed'));}
+ v.addEventListener('canplay',ready); v.addEventListener('playing',ready); v.addEventListener('error',()=>fail(v.error));
+ ${hls ? `if(window.Hls&&Hls.isSupported()){const h=new Hls({enableWorker:true});h.on(Hls.Events.MANIFEST_PARSED,()=>{ready();v.play().catch(()=>{});});h.on(Hls.Events.ERROR,(e,d)=>{if(d&&d.fatal){fail(d);}});h.loadSource("${safeUrl}");h.attachMedia(v);}else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src="${safeUrl}";v.addEventListener('loadedmetadata',()=>{ready();v.play().catch(()=>{});});}else{fail({message:'HLS is not supported on this device'});}` : `v.addEventListener('loadedmetadata',ready);`}
+})();
+</script></body></html>`;
+  }, [directUrl, playback?.embedUrl, isHls]);
+
+  const onWebMessage = (event: WebViewMessageEvent) => {
+    const message = event.nativeEvent.data || '';
+    if (message === 'READY') setPlayerLoading(false);
+    if (message.startsWith('ERROR:')) {
       setPlayerLoading(false);
-      if (status.didJustFinish) setPlayerLoading(false);
-    } else if (status.error) {
-      setPlayerLoading(false);
-      setPlayerError(status.error);
+      setPlayerError(message.slice(6) || 'Playback failed.');
     }
   };
 
@@ -131,43 +145,7 @@ export default function WatchScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.playerShell}>
-          {directUrl ? (
-            <Video
-              key={`${directUrl}-${episode}-${language}`}
-              source={{ uri: directUrl, overrideFileExtensionAndroid: isHls ? 'm3u8' : undefined }}
-              style={styles.video}
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-              useNativeControls
-              isLooping={false}
-              onPlaybackStatusUpdate={onPlaybackStatus}
-              onError={(error) => { setPlayerLoading(false); setPlayerError(error); }}
-            />
-          ) : playback?.embedUrl ? (
-            <WebView
-              source={{ uri: playback.embedUrl }}
-              style={styles.webview}
-              javaScriptEnabled
-              domStorageEnabled
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              sharedCookiesEnabled
-              thirdPartyCookiesEnabled
-              setSupportMultipleWindows={false}
-              originWhitelist={['http://*', 'https://*']}
-              onLoadEnd={() => setPlayerLoading(false)}
-              onError={() => { setPlayerLoading(false); setPlayerError('Embedded player failed to load.'); }}
-            />
-          ) : null}
-
-          {playerLoading && !playerError && (
-            <View style={styles.playerLoader} pointerEvents="none">
-              <ActivityIndicator color="#fff" />
-              <Text style={styles.playerLoaderText}>Resolving stream…</Text>
-            </View>
-          )}
-
-          {playerError && (
+          {playerError ? (
             <View style={styles.playerError}>
               <Ionicons name="alert-circle-outline" size={24} color="#fff" />
               <Text style={styles.playerErrorTitle}>STREAM UNAVAILABLE</Text>
@@ -176,6 +154,28 @@ export default function WatchScreen() {
                 <Ionicons name="refresh" size={14} color="#000" />
                 <Text style={styles.retryText}>RETRY</Text>
               </Pressable>
+            </View>
+          ) : playback ? (
+            <WebView
+              key={`${episode}-${language}-${directUrl || playback.embedUrl}`}
+              source={{ html: playerHtml, baseUrl: 'https://www.anivault.co/' }}
+              style={styles.webview}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              allowsFullscreenVideo
+              mixedContentMode="always"
+              originWhitelist={['http://*', 'https://*']}
+              onMessage={onWebMessage}
+              onError={() => { setPlayerLoading(false); setPlayerError('The video player failed to load.'); }}
+            />
+          ) : null}
+
+          {playerLoading && !playerError && (
+            <View style={styles.playerLoader} pointerEvents="none">
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.playerLoaderText}>Resolving stream…</Text>
             </View>
           )}
         </View>
@@ -231,6 +231,10 @@ export default function WatchScreen() {
   );
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgBase },
   center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
@@ -245,7 +249,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingBottom: 28 },
   playerShell: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  video: { flex: 1, backgroundColor: '#000' },
   webview: { flex: 1, backgroundColor: '#000' },
   playerLoader: { ...StyleSheet.absoluteFillObject, zIndex: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
   playerLoaderText: { marginTop: 9, color: 'rgba(255,255,255,0.55)', fontSize: 10 },
