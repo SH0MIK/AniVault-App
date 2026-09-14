@@ -34,9 +34,12 @@ export interface PlaybackResult {
   [key: string]: unknown;
 }
 
+// Use the scraper's documented path form and explicitly mark the MAL id.
+// This avoids ambiguity in the query-param resolver and keeps the source
+// selection separate from AniVault's authenticated website API.
 export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'anikoto'): Promise<PlaybackResult> {
-  const params = new URLSearchParams({ source, malId: String(malId), ep: String(episode), type: language });
-  return apiFetchScraper<PlaybackResult>(`/api/watch?${params.toString()}`);
+  const path = `/api/watch/${encodeURIComponent(source)}/mal-${encodeURIComponent(String(malId))}/${encodeURIComponent(String(episode))}/${encodeURIComponent(language)}`;
+  return apiFetchScraper<PlaybackResult>(path);
 }
 
 export function toggleFavorite(animeId: number, title: string, image: string): Promise<{ success: boolean; favorited: boolean }> { return apiFetchForm('/api/list.php', { action: 'favorite', anime_id: String(animeId), anime_title: title, anime_image: image }); }
