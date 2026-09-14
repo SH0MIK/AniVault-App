@@ -36,13 +36,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const finishLogin = useCallback(async (token: string, knownUser?: AniVaultUser) => {
-    await setToken(token);
-    // Password/register endpoints already return the complete user. Avoid an
-    // unnecessary second request here; OAuth still has to resolve /me.
-    const resolvedUser = knownUser ?? (await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me')).user;
-    setUser(resolvedUser);
-    fullSync(resolvedUser.id).catch(() => {});
-    registerForPushNotifications().catch(() => {});
+    try {
+      await setToken(token);
+      // Password/register endpoints already return the complete user. Avoid an
+      // unnecessary second request here; OAuth still has to resolve /me.
+      const resolvedUser = knownUser ?? (await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me', { auth: true })).user;
+      setUser(resolvedUser);
+      // The auth bootstrap screen must only be shown while restoring an
+      // existing session. A successful login/register also needs to finish
+      // that state transition, otherwise Root stays on StartupScreen forever.
+      setIsLoading(false);
+      fullSync(resolvedUser.id).catch(() => {});
+      registerForPushNotifications().catch(() => {});
+    } catch (err) {
+      setIsLoading(false);
+      throw err;
+    }
   }, []);
 
   const handleOAuthUrl = useCallback(async (url: string) => {
@@ -87,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        const res = await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me');
+        const res = await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me', { auth: true });
         setUser(res.user);
         fullSync(res.user.id).catch(() => {});
         registerForPushNotifications().catch(() => {});
@@ -108,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await finishLogin(res.token, res.user);
       return { success: true };
     } catch (err: any) {
+      setIsLoading(false);
       return { success: false, message: err.message };
     }
   }, [finishLogin]);
@@ -121,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await finishLogin(res.token, res.user);
       return { success: true };
     } catch (err: any) {
+      setIsLoading(false);
       return { success: false, message: err.message };
     }
   }, [finishLogin]);
@@ -131,12 +142,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     await clearToken();
     setUser(null);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
       clearToken();
       setUser(null);
+      setIsLoading(false);
     });
   }, []);
 
