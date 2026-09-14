@@ -2,23 +2,16 @@ import { apiFetch, apiFetchForm, apiFetchScraper } from './client';
 
 // The website mobile endpoints remain the source for authenticated AniVault
 // catalog/list/history data. Streaming-specific calls use the scraper API.
-export interface BrowseItem {
-  id: number; title: string; image: string; score: number | null; type: string; episodes: number;
-  airedInfo: { aired: number; total: number | null } | null; dubbedLangs: string[]; userStatus: string | null;
-}
+export interface BrowseItem { id: number; title: string; image: string; score: number | null; type: string; episodes: number; airedInfo: { aired: number; total: number | null } | null; dubbedLangs: string[]; userStatus: string | null; }
 export interface BrowseResult { data: BrowseItem[]; pagination: { last_visible_page?: number; has_next_page?: boolean }; genres: { mal_id: number; name: string }[]; }
-export function browse(opts: { q?: string; genres?: number[]; status?: string; page?: number }): Promise<BrowseResult> {
-  const params = new URLSearchParams(); if (opts.q) params.set('q', opts.q); if (opts.status) params.set('status', opts.status); if (opts.page) params.set('page', String(opts.page)); for (const g of opts.genres ?? []) params.append('genres[]', String(g)); return apiFetch<BrowseResult>(`/api/mobile/browse?${params.toString()}`);
-}
+export function browse(opts: { q?: string; genres?: number[]; status?: string; page?: number }): Promise<BrowseResult> { const params = new URLSearchParams(); if (opts.q) params.set('q', opts.q); if (opts.status) params.set('status', opts.status); if (opts.page) params.set('page', String(opts.page)); for (const g of opts.genres ?? []) params.append('genres[]', String(g)); return apiFetch<BrowseResult>(`/api/mobile/browse?${params.toString()}`); }
 export interface AnimeDetail { id: number; title: string; titleJapanese: string | null; image: string; synopsis: string; score: number | null; status: string; type: string; genres: { id: number; name: string }[]; totalEpisodes: number; airedSoFar: number | null; isAiring: boolean; dubbedLangs: string[]; related: { id: number; title: string; type: string }[]; }
 export function getAnimeDetail(id: number): Promise<{ success: boolean; anime: AnimeDetail; userEntry: any; isFavorite: boolean }> { return apiFetch(`/api/mobile/anime/${id}`); }
 export interface EpisodeItem { mal_id?: number; episode?: number; title?: string; aired?: string | null; score?: number | null; filler?: boolean; recap?: boolean; [key: string]: unknown; }
 export function getEpisodes(id: number, page = 1): Promise<{ success: boolean; data: EpisodeItem[]; pagination: any }> { return apiFetch(`/api/mobile/anime/${id}/episodes?page=${page}`); }
 
 export interface EpisodeThumbnail { anime_id: number; episode_num: number; image_url: string; }
-export function getEpisodeThumbnails(id: number): Promise<{ success: boolean; overrides: EpisodeThumbnail[]; total_eps?: number }> {
-  return apiFetch(`/api/episode_override.php?anime_id=${id}&all=1`);
-}
+export function getEpisodeThumbnails(id: number): Promise<{ success: boolean; overrides: EpisodeThumbnail[]; total_eps?: number }> { return apiFetch(`/api/episode_override.php?anime_id=${id}&all=1`); }
 
 export interface PlaybackResult {
   embedUrl?: string;
@@ -34,9 +27,10 @@ export interface PlaybackResult {
   [key: string]: unknown;
 }
 
-// AnimeHeaven is the current verified non-Anikoto source on the AniVault scraper.
-// Use the documented path form and explicitly mark the MAL id.
-export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'animeheaven'): Promise<PlaybackResult> {
+// AniZone is the first native streaming source. The beta scraper deployment
+// already exposes it; keep the source configurable so additional servers can
+// be added later without changing the app's API plumbing.
+export function getPlayback(malId: number, episode: number, language: 'sub' | 'dub', source = 'anizone'): Promise<PlaybackResult> {
   const path = `/api/watch/${encodeURIComponent(source)}/mal-${encodeURIComponent(String(malId))}/${encodeURIComponent(String(episode))}/${encodeURIComponent(language)}`;
   return apiFetchScraper<PlaybackResult>(path);
 }
