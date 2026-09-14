@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, AppState, Image, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Orbitron_600SemiBold, Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from '@expo-google-fonts/exo-2';
@@ -8,9 +8,22 @@ import LoginScreen from './src/screens/LoginScreen';
 import { initDb } from './src/db/schema';
 import { fullSync } from './src/db/sync';
 import RootNavigator from './src/navigation/RootNavigator';
-import { colors } from './src/theme';
+import { colors, fonts } from './src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function StartupScreen() {
+  return (
+    <View style={styles.startup}>
+      <Image source={require('./assets/icon.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.brand}>ANIVAULT</Text>
+      <View style={styles.loaderRow}>
+        <ActivityIndicator color={colors.accent} size="small" />
+        <Text style={styles.loading}>LOADING</Text>
+      </View>
+    </View>
+  );
+}
 
 function Root() {
   const { user, isLoading } = useAuth();
@@ -25,13 +38,7 @@ function Root() {
     return () => sub.remove();
   }, [user?.id]);
 
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
+  if (isLoading) return <StartupScreen />;
   return user ? <RootNavigator /> : <LoginScreen />;
 }
 
@@ -42,8 +49,8 @@ export default function App() {
     dbReady.current = true;
   }
 
-  // Site uses Orbitron for headings and Exo 2 for body text — loaded here
-  // once and referenced by family name everywhere via src/theme.ts.
+  // Keep the existing bundled fonts for compatibility, while the UI theme
+  // controls their use consistently across the redesigned screens.
   const [fontsLoaded] = useFonts({
     Orbitron_600SemiBold, Orbitron_700Bold,
     Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold,
@@ -63,5 +70,34 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
+  startup: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 24,
+  },
+  logo: {
+    width: 82,
+    height: 82,
+    marginBottom: 18,
+  },
+  brand: {
+    color: colors.textPrimary,
+    fontFamily: fonts.display,
+    fontSize: 22,
+    letterSpacing: 3.2,
+  },
+  loaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginTop: 28,
+  },
+  loading: {
+    color: colors.textMuted,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 10,
+    letterSpacing: 1.8,
+  },
 });
