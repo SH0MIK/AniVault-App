@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Video, ResizeMode, type AVPlaybackStatus } from 'expo-av';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { getAnimeDetail, getEpisodes, getEpisodeThumbnails, type AnimeDetail, type EpisodeItem, type EpisodeThumbnail } from '../api/content';
+import { getAnimeDetail, getEpisodes, getEpisodeThumbnails, getPlayback, type AnimeDetail, type EpisodeItem, type EpisodeThumbnail, type PlaybackResult } from '../api/content';
 import { colors, fonts } from '../theme';
 
 export default function WatchScreen() {
@@ -18,7 +19,9 @@ export default function WatchScreen() {
   const [episode, setEpisode] = useState(Math.max(1, Number(initialEpisode) || 1));
   const [language, setLanguage] = useState<'sub' | 'dub'>('sub');
   const [loading, setLoading] = useState(true);
+  const [playback, setPlayback] = useState<PlaybackResult | null>(null);
   const [playerLoading, setPlayerLoading] = useState(true);
+  const [playerError, setPlayerError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +41,7 @@ export default function WatchScreen() {
         }
         setThumbnails(map);
       } catch {
-        // Keep the player usable even if optional episode metadata fails.
+        // Keep the player shell usable even if optional metadata fails.
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,16 +49,35 @@ export default function WatchScreen() {
     return () => { cancelled = true; };
   }, [animeId]);
 
-  const totalEpisodes = Math.max(
-    1,
-    anime?.totalEpisodes || episodes.length || 1,
-  );
-
+  const totalEpisodes = Math.max(1, anime?.totalEpisodes || episodes.length || 1);
   const malId = anime?.id ?? animeId;
-  const playerUrl = useMemo(
-    () => `https://www.anivault.co/#/stream/mal/${encodeURIComponent(String(malId))}/${encodeURIComponent(String(episode))}/${language}`,
-    [malId, episode, language],
-  );
+
+  useEffect(() => {
+    if (!anime) return;
+    let cancelled = false;
+    setPlayback(null);
+    setPlayerLoading(true);
+    setPlayerError(null);
+
+    (async () => {
+      try {
+        const result = await getPlayback(malId, episode, language);
+        if (cancelled) return;
+        const directUrl = result.hlsProxyUrl || result.m3u8 || result.videoUrl || result.streamUrl || result.url;
+        if (!directUrl && !result.embedUrl) {
+          throw new Error('The scraper did not return a playable stream.');
+        }
+        setPlayback(result);
+      } catch (error: any) {
+        if (cancelled) return;
+        setPlayback(null);
+        setPlayerError(error?.message || 'Could not resolve this episode.');
+        setPlayerLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [anime, malId, episode, language]);
 
   const episodeRows = useMemo(() => {
     const max = Math.max(totalEpisodes, episodes.length, episode);
@@ -67,11 +89,22 @@ export default function WatchScreen() {
   }, [episodes, totalEpisodes, episode]);
 
   const title = anime?.title || routeTitle || 'Watching';
+  const directUrl = playback?.hlsProxyUrl || playback?.m3u8 || playback?.videoUrl || playback?.streamUrl || playback?.url || null;
+  const isHls = Boolean(directUrl && (playback?.hlsProxyUrl || playback?.m3u8 || directUrl.includes('.m3u8')));
 
   const selectEpisode = (next: number) => {
     if (next < 1 || next > totalEpisodes) return;
-    setPlayerLoading(true);
     setEpisode(next);
+  };
+
+  const onPlaybackStatus = (status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      setPlayerLoading(false);
+      if (status.didJustFinish) setPlayerLoading(false);
+    } else if (status.error) {
+      setPlayerLoading(false);
+      setPlayerError(status.error);
+    }
   };
 
   if (loading) {
@@ -98,27 +131,53 @@ export default function WatchScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.playerShell}>
-          {playerLoading && (
+          {directUrl ? (
+            <Video
+              key={`${directUrl}-${episode}-${language}`}
+              source={{ uri: directUrl, overrideFileExtensionAndroid: isHls ? 'm3u8' : undefined }}
+              style={styles.video}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              useNativeControls
+              isLooping={false}
+              onPlaybackStatusUpdate={onPlaybackStatus}
+              onError={(error) => { setPlayerLoading(false); setPlayerError(error); }}
+            />
+          ) : playback?.embedUrl ? (
+            <WebView
+              source={{ uri: playback.embedUrl }}
+              style={styles.webview}
+              javaScriptEnabled
+              domStorageEnabled
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              sharedCookiesEnabled
+              thirdPartyCookiesEnabled
+              setSupportMultipleWindows={false}
+              originWhitelist={['http://*', 'https://*']}
+              onLoadEnd={() => setPlayerLoading(false)}
+              onError={() => { setPlayerLoading(false); setPlayerError('Embedded player failed to load.'); }}
+            />
+          ) : null}
+
+          {playerLoading && !playerError && (
             <View style={styles.playerLoader} pointerEvents="none">
               <ActivityIndicator color="#fff" />
-              <Text style={styles.playerLoaderText}>Loading player…</Text>
+              <Text style={styles.playerLoaderText}>Resolving stream…</Text>
             </View>
           )}
-          <WebView
-            key={`${episode}-${language}`}
-            source={{ uri: playerUrl }}
-            style={styles.webview}
-            onLoadEnd={() => setPlayerLoading(false)}
-            onError={() => setPlayerLoading(false)}
-            javaScriptEnabled
-            domStorageEnabled
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            sharedCookiesEnabled
-            thirdPartyCookiesEnabled
-            setSupportMultipleWindows={false}
-            originWhitelist={['http://*', 'https://*']}
-          />
+
+          {playerError && (
+            <View style={styles.playerError}>
+              <Ionicons name="alert-circle-outline" size={24} color="#fff" />
+              <Text style={styles.playerErrorTitle}>STREAM UNAVAILABLE</Text>
+              <Text style={styles.playerErrorText}>{playerError}</Text>
+              <Pressable onPress={() => selectEpisode(episode)} style={styles.retryButton}>
+                <Ionicons name="refresh" size={14} color="#000" />
+                <Text style={styles.retryText}>RETRY</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <View style={styles.controlRow}>
@@ -136,10 +195,10 @@ export default function WatchScreen() {
         </View>
 
         <View style={styles.languageRow}>
-          <Pressable onPress={() => { if (language !== 'sub') { setPlayerLoading(true); setLanguage('sub'); } }} style={[styles.languageButton, language === 'sub' && styles.languageActive]}>
+          <Pressable onPress={() => { if (language !== 'sub') setLanguage('sub'); }} style={[styles.languageButton, language === 'sub' && styles.languageActive]}>
             <Text style={[styles.languageText, language === 'sub' && styles.languageActiveText]}>SUBTITLED</Text>
           </Pressable>
-          <Pressable onPress={() => { if (language !== 'dub') { setPlayerLoading(true); setLanguage('dub'); } }} style={[styles.languageButton, language === 'dub' && styles.languageActive]}>
+          <Pressable onPress={() => { if (language !== 'dub') setLanguage('dub'); }} style={[styles.languageButton, language === 'dub' && styles.languageActive]}>
             <Text style={[styles.languageText, language === 'dub' && styles.languageActiveText]}>DUBBED</Text>
           </Pressable>
         </View>
@@ -186,9 +245,15 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingBottom: 28 },
   playerShell: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  video: { flex: 1, backgroundColor: '#000' },
   webview: { flex: 1, backgroundColor: '#000' },
-  playerLoader: { ...StyleSheet.absoluteFillObject, zIndex: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
+  playerLoader: { ...StyleSheet.absoluteFillObject, zIndex: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
   playerLoaderText: { marginTop: 9, color: 'rgba(255,255,255,0.55)', fontSize: 10 },
+  playerError: { ...StyleSheet.absoluteFillObject, zIndex: 4, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: '#000' },
+  playerErrorTitle: { marginTop: 7, color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  playerErrorText: { marginTop: 6, color: 'rgba(255,255,255,0.55)', fontSize: 9, textAlign: 'center' },
+  retryButton: { marginTop: 12, paddingHorizontal: 13, height: 30, borderRadius: 7, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  retryText: { color: '#000', fontSize: 9, fontWeight: '900' },
   controlRow: { flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 12 },
   control: { height: 34, paddingHorizontal: 11, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.07)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
   activeControl: { backgroundColor: 'rgba(255,255,255,0.13)' },
