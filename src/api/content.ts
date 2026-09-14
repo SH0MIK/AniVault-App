@@ -21,6 +21,52 @@ export function getAnimeDetail(id: number): Promise<{ success: boolean; anime: A
 export interface EpisodeItem { mal_id?: number; episode?: number; title?: string; aired?: string | null; score?: number | null; filler?: boolean; recap?: boolean; [key: string]: unknown; }
 export function getEpisodes(id: number, page = 1): Promise<{ success: boolean; data: EpisodeItem[]; pagination: any }> { return apiFetch(`/api/mobile/anime/${id}/episodes?page=${page}`); }
 
+// Art and episode stills are served by the private AniVault scraper service.
+// Keep the response handling tolerant because the scraper intentionally merges
+// MAL/TMDB/Kitsu/AniList art into a few compatible shapes.
+export interface ScraperAnimeArt {
+  poster?: string;
+  image?: string;
+  cover?: string;
+  banner?: string;
+  logo?: string;
+  [key: string]: unknown;
+}
+
+export function getScraperAnimeArt(id: number): Promise<ScraperAnimeArt> {
+  return apiFetchScraper<ScraperAnimeArt>(`/api/anime?malId=${encodeURIComponent(String(id))}`);
+}
+
+export function scraperPoster(art: any): string {
+  return art?.poster ?? art?.image ?? art?.images?.poster ?? art?.data?.poster ?? art?.data?.image ?? '';
+}
+
+export function scraperBanner(art: any): string {
+  return art?.banner ?? art?.cover ?? art?.backdrop ?? art?.coverImage ?? art?.images?.banner ?? art?.images?.cover ?? art?.data?.banner ?? art?.data?.cover ?? art?.data?.backdrop ?? art?.data?.coverImage ?? '';
+}
+
+export function scraperLogo(art: any): string {
+  return art?.logo ?? art?.images?.logo ?? art?.data?.logo ?? '';
+}
+
+export interface ScraperEpisodeResult {
+  thumbnail?: string;
+  image?: string;
+  image_url?: string;
+  episode?: { thumbnail?: string; image?: string; image_url?: string; [key: string]: unknown };
+  data?: { thumbnail?: string; image?: string; image_url?: string; episode?: { thumbnail?: string; image?: string; image_url?: string }; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+export function scraperEpisodeThumbnail(result: any): string {
+  return result?.thumbnail ?? result?.image ?? result?.image_url ?? result?.episode?.thumbnail ?? result?.episode?.image ?? result?.episode?.image_url ?? result?.data?.thumbnail ?? result?.data?.image ?? result?.data?.image_url ?? result?.data?.episode?.thumbnail ?? result?.data?.episode?.image ?? result?.data?.episode?.image_url ?? '';
+}
+
+export async function getScraperEpisodeThumbnail(id: number, episode: number): Promise<string> {
+  const result = await apiFetchScraper<ScraperEpisodeResult>(`/api/episode?malId=${encodeURIComponent(String(id))}&ep=${encodeURIComponent(String(episode))}`);
+  return scraperEpisodeThumbnail(result);
+}
+
 export interface MalAnimeDetail { id: number; title: string; main_picture?: { medium?: string; large?: string }; synopsis?: string; mean?: number; status?: string; num_episodes?: number; media_type?: string; start_date?: string; end_date?: string; genres?: Array<{ id: number; name: string }>; related_anime?: unknown[]; }
 export interface MalEpisodesResult { data: Array<{ node: { id: number; title: string; synopsis?: string; airing_at?: string | null; score?: number | null; length?: number | null; }; }>; paging?: { next?: string }; }
 
