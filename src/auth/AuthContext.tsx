@@ -8,6 +8,7 @@ import { fullSync } from '../db/sync';
 import { registerForPushNotifications } from '../api/push';
 
 const SITE_URL = 'https://www.anivault.co';
+const OAUTH_CALLBACK_HOST = 'oauth-callback';
 
 export interface AniVaultUser {
   id: number;
@@ -21,7 +22,7 @@ export interface AniVaultUser {
 
 interface AuthState {
   user: AniVaultUser | null;
-  isLoading: boolean; // true only during the initial launch check
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
   register: (username: string, email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   loginWithOAuth: (provider: 'google' | 'discord') => void;
@@ -34,38 +35,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AniVaultUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Shared by password login, sign-up, and the OAuth deep-link callback —
-  // all three end with "we have a token, adopt it as the logged-in user".
-  const adoptToken = useCallback(async (token: string) => {
+  const finishLogin = useCallback(async (token: string, knownUser?: AniVaultUser) => {
     await setToken(token);
-    const res = await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me');
-    setUser(res.user);
-    fullSync(res.user.id).catch(() => {});
+    // Password/register endpoints already return the complete user. Avoid an
+    // unnecessary second request here; OAuth still has to resolve /me.
+    const resolvedUser = knownUser ?? (await apiFetch<{ success: boolean; user: AniVaultUser }>('/api/mobile/me')).user;
+    setUser(resolvedUser);
+    fullSync(resolvedUser.id).catch(() => {});
     registerForPushNotifications().catch(() => {});
   }, []);
 
-  // Google/Discord login happens in a real browser (OAuth can't happen in a
-  // fetch call) — the backend's callback redirects to this app's custom URL
-  // scheme with the resulting session id as a token once it's done. See
-  // /api/mobile/oauth-start and the oauth_google.php/oauth_discord.php
-  // changes on the backend.
+  const handleOAuthUrl = useCallback(async (url: string) => {
+    const parsed = Linking.parse(url);
+    if (parsed.scheme !== 'anivault' || parsed.hostname !== OAUTH_CALLBACK_HOST) return;
+    const token = parsed.queryParams?.token;
+    if (typeof token !== 'string' || !token) return;
+    try {
+      await finishLogin(token);
+    } catch {
+      await clearToken();
+      setUser(null);
+    }
+  }, [finishLogin]);
+
+  // Handle both warm-app events and the cold-start case. The old code only
+  // listened for url events, so an OAuth callback that launched the app from
+  // a fully closed state was silently lost.
   useEffect(() => {
+    let mounted = true;
     const sub = Linking.addEventListener('url', ({ url }) => {
-      const { hostname, queryParams } = Linking.parse(url);
-      if (hostname === 'oauth-callback' && typeof queryParams?.token === 'string') {
-        adoptToken(queryParams.token).catch(() => {});
-      }
+      handleOAuthUrl(url).catch(() => {});
     });
-    return () => sub.remove();
-  }, [adoptToken]);
+    Linking.getInitialURL().then((url) => {
+      if (mounted && url) handleOAuthUrl(url).catch(() => {});
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, [handleOAuthUrl]);
 
   const loginWithOAuth = useCallback((provider: 'google' | 'discord') => {
     Linking.openURL(`${SITE_URL}/api/mobile/oauth-start?provider=${provider}`).catch(() => {});
   }, []);
 
-  // On app launch: if we have a stored token, verify it's still valid
-  // server-side (the user may have logged out elsewhere, or it expired)
-  // rather than trusting it blindly and only finding out on first API call.
   useEffect(() => {
     (async () => {
       const token = await getToken();
@@ -88,43 +101,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      const res = await apiFetch<{ success: boolean; token: string; message?: string }>(
+      const res = await apiFetch<{ success: boolean; token: string; message?: string; user: AniVaultUser }>(
         '/api/mobile/login',
         { method: 'POST', body: { username, password }, auth: false }
       );
-      await adoptToken(res.token);
+      await finishLogin(res.token, res.user);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message };
     }
-  }, [adoptToken]);
+  }, [finishLogin]);
 
   const register = useCallback(async (username: string, email: string, password: string) => {
     try {
-      const res = await apiFetch<{ success: boolean; token: string; message?: string }>(
+      const res = await apiFetch<{ success: boolean; token: string; message?: string; user: AniVaultUser }>(
         '/api/mobile/register',
         { method: 'POST', body: { username, email, password }, auth: false }
       );
-      await adoptToken(res.token);
+      await finishLogin(res.token, res.user);
       return { success: true };
     } catch (err: any) {
       return { success: false, message: err.message };
     }
-  }, [adoptToken]);
+  }, [finishLogin]);
 
   const logout = useCallback(async () => {
     try {
       await apiFetch('/api/mobile/logout', { method: 'POST' });
-    } catch {
-      // token may already be invalid server-side — clear locally regardless
-    }
+    } catch {}
     await clearToken();
     setUser(null);
   }, []);
 
-  // Registered once so a 401 anywhere in the app (expired token, logged out
-  // from another device, etc) drops back to the login screen instead of
-  // leaving stale screens up against a session that no longer works.
   useEffect(() => {
     setUnauthorizedHandler(() => {
       clearToken();
