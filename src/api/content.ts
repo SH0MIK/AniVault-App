@@ -1,5 +1,8 @@
-import { apiFetch, apiFetchWeb, apiFetchForm } from './client';
+import { apiFetch, apiFetchForm } from './client';
 
+// The website mobile endpoints remain the source for authenticated AniVault
+// catalog/list/history data. Streaming-specific calls can use apiFetchScraper
+// from client.ts when a screen needs the scraper's native response shape.
 export interface BrowseItem {
   id: number; title: string; image: string; score: number | null; type: string; episodes: number;
   airedInfo: { aired: number; total: number | null } | null; dubbedLangs: string[]; userStatus: string | null;
