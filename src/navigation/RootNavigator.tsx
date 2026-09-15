@@ -1,22 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { Suspense } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import BrowseScreen from '../screens/BrowseScreen';
-import HomeScreen from '../screens/HomeScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import ScheduleScreen from '../screens/ScheduleScreen';
-import AnimeDetailScreen from '../screens/AnimeDetailScreen';
-import WatchScreen from '../screens/WatchScreen';
-import AccountSettingsScreen from '../screens/AccountSettingsScreen';
-import UserProfileScreen from '../screens/UserProfileScreen';
-import FollowListScreen from '../screens/FollowListScreen';
-import WatchNowScreen from '../screens/WatchNowScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import AnnouncementsScreen from '../screens/AnnouncementsScreen';
-import CharacterScreen from '../screens/CharacterScreen';
 import { fonts } from '../theme';
+
+// Screens are loaded on demand. This prevents one broken/optional screen
+// module from making the whole navigator fail during the first render.
+const BrowseScreen = React.lazy(() => import('../screens/BrowseScreen'));
+const HomeScreen = React.lazy(() => import('../screens/HomeScreen'));
+const ProfileScreen = React.lazy(() => import('../screens/ProfileScreen'));
+const ScheduleScreen = React.lazy(() => import('../screens/ScheduleScreen'));
+const AnimeDetailScreen = React.lazy(() => import('../screens/AnimeDetailScreen'));
+const WatchScreen = React.lazy(() => import('../screens/WatchScreen'));
+const AccountSettingsScreen = React.lazy(() => import('../screens/AccountSettingsScreen'));
+const UserProfileScreen = React.lazy(() => import('../screens/UserProfileScreen'));
+const FollowListScreen = React.lazy(() => import('../screens/FollowListScreen'));
+const WatchNowScreen = React.lazy(() => import('../screens/WatchNowScreen'));
+const HistoryScreen = React.lazy(() => import('../screens/HistoryScreen'));
+const AnnouncementsScreen = React.lazy(() => import('../screens/AnnouncementsScreen'));
+const CharacterScreen = React.lazy(() => import('../screens/CharacterScreen'));
 
 export type RootStackParamList = {
   Tabs: undefined;
@@ -63,6 +66,14 @@ function TabIcon({ item, focused }: { item: TabItem; focused: boolean }) {
   );
 }
 
+function ScreenFallback() {
+  return (
+    <View style={styles.fallback}>
+      <ActivityIndicator color="#fff" size="small" />
+    </View>
+  );
+}
+
 function Tabs() {
   return (
     <Tab.Navigator screenOptions={({ route }) => ({
@@ -82,24 +93,27 @@ function Tabs() {
 
 export default function RootNavigator() {
   return (
-    <NavigationContainer theme={navTheme as any}>
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#000' }, headerTintColor: '#fff', headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
-        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-        <Stack.Screen name="AnimeDetail" component={AnimeDetailScreen} options={({ route }) => ({ title: route.params?.title ?? 'Anime' })} />
-        <Stack.Screen name="Watch" component={WatchScreen} options={{ title: 'Watching', headerShown: false }} />
-        <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ title: 'Account Settings' }} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({ route }) => ({ title: route.params?.username ?? 'Profile' })} />
-        <Stack.Screen name="FollowList" component={FollowListScreen} options={({ route }) => ({ title: route.params?.type === 'followers' ? 'Followers' : 'Following' })} />
-        <Stack.Screen name="WatchNow" component={WatchNowScreen} options={{ title: 'Watch Now' }} />
-        <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'Watch History' }} />
-        <Stack.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: 'Announcements' }} />
-        <Stack.Screen name="Character" component={CharacterScreen} options={{ title: 'Character' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Suspense fallback={<ScreenFallback />}>
+      <NavigationContainer theme={navTheme as any}>
+        <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#000' }, headerTintColor: '#fff', headerTitleStyle: { fontFamily: fonts.bodyBold } }}>
+          <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+          <Stack.Screen name="AnimeDetail" component={AnimeDetailScreen} options={({ route }) => ({ title: route.params?.title ?? 'Anime' })} />
+          <Stack.Screen name="Watch" component={WatchScreen} options={{ title: 'Watching', headerShown: false }} />
+          <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ title: 'Account Settings' }} />
+          <Stack.Screen name="UserProfile" component={UserProfileScreen} options={({ route }) => ({ title: route.params?.username ?? 'Profile' })} />
+          <Stack.Screen name="FollowList" component={FollowListScreen} options={({ route }) => ({ title: route.params?.type === 'followers' ? 'Followers' : 'Following' })} />
+          <Stack.Screen name="WatchNow" component={WatchNowScreen} options={{ title: 'Watch Now' }} />
+          <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'Watch History' }} />
+          <Stack.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: 'Announcements' }} />
+          <Stack.Screen name="Character" component={CharacterScreen} options={{ title: 'Character' }} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </Suspense>
   );
 }
 
 const styles = StyleSheet.create({
+  fallback: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   tabBar: { height: 58, backgroundColor: '#08080c', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', elevation: 0, paddingTop: 4, paddingBottom: 4 },
   tabBarItem: { justifyContent: 'center' },
   tabItem: { alignItems: 'center', justifyContent: 'center', gap: 2 },
