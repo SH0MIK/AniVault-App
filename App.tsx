@@ -1,6 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, AppState, Image, Text } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Orbitron_600SemiBold, Orbitron_700Bold } from '@expo-google-fonts/orbitron';
 import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from '@expo-google-fonts/exo-2';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
@@ -9,8 +8,6 @@ import { initDb } from './src/db/schema';
 import { fullSync } from './src/db/sync';
 import RootNavigator from './src/navigation/RootNavigator';
 import { colors, fonts } from './src/theme';
-
-SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function StartupScreen() {
   return (
@@ -28,9 +25,6 @@ function StartupScreen() {
 function Root() {
   const { user, isLoading } = useAuth();
 
-  // Re-sync whenever the app comes back to the foreground — catches the
-  // "closed the app on the subway with no signal, opened it back up with
-  // wifi" case without the person having to do anything.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && user) fullSync(user.id).catch(() => {});
@@ -43,30 +37,23 @@ function Root() {
 }
 
 export default function App() {
-  const dbReady = useRef(false);
-  if (!dbReady.current) {
-    initDb();
-    dbReady.current = true;
-  }
+  // Initialize the local database after the first render instead of during
+  // render. A synchronous SQLite error must never prevent React from
+  // mounting and leave the Android splash screen visible indefinitely.
+  useEffect(() => {
+    try {
+      initDb();
+    } catch (error) {
+      console.warn('AniVault database initialization failed:', error);
+    }
+  }, []);
 
-  // Fonts are loaded in the background. They must never block the native
-  // splash screen or the app itself; a font-loading failure should not leave
-  // the user staring at the bundled splash image forever.
-  const [fontsLoaded] = useFonts({
+  // Fonts are optional visual enhancements. The app must render even if a
+  // bundled font cannot initialize.
+  useFonts({
     Orbitron_600SemiBold, Orbitron_700Bold,
     Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold,
   });
-
-  useEffect(() => {
-    // Hide the native Expo splash as soon as React has mounted. The in-app
-    // StartupScreen then handles auth restoration with a real loading state.
-    // Do not make app startup depend on Google-font loading.
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
-  // Keep fontsLoaded referenced so the hook remains explicit and fonts can
-  // replace the fallback automatically once they finish loading.
-  void fontsLoaded;
 
   return (
     <AuthProvider>
