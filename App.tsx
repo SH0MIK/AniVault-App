@@ -49,18 +49,24 @@ export default function App() {
     dbReady.current = true;
   }
 
-  // Keep the existing bundled fonts for compatibility, while the UI theme
-  // controls their use consistently across the redesigned screens.
+  // Fonts are loaded in the background. They must never block the native
+  // splash screen or the app itself; a font-loading failure should not leave
+  // the user staring at the bundled splash image forever.
   const [fontsLoaded] = useFonts({
     Orbitron_600SemiBold, Orbitron_700Bold,
     Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold,
   });
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
+    // Hide the native Expo splash as soon as React has mounted. The in-app
+    // StartupScreen then handles auth restoration with a real loading state.
+    // Do not make app startup depend on Google-font loading.
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
-  if (!fontsLoaded) return null;
+  // Keep fontsLoaded referenced so the hook remains explicit and fonts can
+  // replace the fallback automatically once they finish loading.
+  void fontsLoaded;
 
   return (
     <AuthProvider>
