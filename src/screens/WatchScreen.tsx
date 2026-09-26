@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { getAnimeDetail, getEpisodes, EpisodeItem } from '../api/content';
 import { resolveStream, NativeStream } from '../api/stream';
@@ -39,6 +40,7 @@ export default function WatchScreen() {
   const [duration, setDuration] = useState(0);
   const [resumeAt, setResumeAt] = useState(0);
   const [audio, setAudio] = useState<'sub' | 'dub'>('sub');
+  const [sourceType, setSourceType] = useState<'hls' | 'embed'>('hls');
   const [server, setServer] = useState('');
   const [controls, setControls] = useState(true);
   const [volume, setVolume] = useState(1);
@@ -47,6 +49,8 @@ export default function WatchScreen() {
   const currentEpisode = useMemo(() => episodes.find((e) => Number(e.episode) === Number(episodeNum)), [episodes, episodeNum]);
   const displayTitle = anime?.title ?? routeTitle ?? 'AniVault';
   const source = stream?.m3u8 ?? stream?.mp4 ?? null;
+  const embedUrl = `https://babastream.top/embed/${encodeURIComponent(animeId)}/${encodeURIComponent(episodeNum)}/${audio}`;
+  const playableEmbed = sourceType === 'embed' ? embedUrl : null;
 
   const showControls = useCallback(() => {
     setControls(true);
@@ -65,21 +69,26 @@ export default function WatchScreen() {
     try {
       const saved = user ? getProgress(user.id, animeId, episodeNum)?.watch_time ?? 0 : 0;
       setResumeAt(saved);
-      const [detail, eps, resolved] = await Promise.all([
+      const [detail, eps] = await Promise.all([
         getAnimeDetail(animeId),
         getEpisodes(animeId),
-        resolveStream(animeId, episodeNum, audio, server),
       ]);
       setAnime(detail.anime);
       setEpisodes(eps.data ?? []);
-      setStream(resolved);
-      if (!server) setServer(resolved.server ?? resolved.servers?.[0]?.name ?? '');
+
+      if (sourceType === 'hls') {
+        const resolved = await resolveStream(animeId, episodeNum, audio, server);
+        setStream(resolved);
+        if (!server) setServer(resolved.server ?? resolved.servers?.[0]?.name ?? '');
+      } else {
+        setStream(null);
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Unable to resolve a playable source.');
     } finally {
       setLoading(false);
     }
-  }, [animeId, episodeNum, audio, server, user?.id]);
+  }, [animeId, episodeNum, audio, server, sourceType, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -181,8 +190,18 @@ export default function WatchScreen() {
     setControls(true);
   };
 
+  const selectSourceType = (value: 'hls' | 'embed') => {
+    if (value === sourceType) return;
+    setLoading(true);
+    setError(null);
+    setSourceType(value);
+    if (value === 'embed') setServer('BabaStream');
+    else setServer('');
+    setControls(true);
+  };
+
   const selectServer = async (name: string) => {
-    if (name === server) return;
+    if (sourceType !== 'hls' || name === server) return;
     try {
       setLoading(true);
       const next = await resolveStream(animeId, episodeNum, audio, name);
@@ -206,7 +225,11 @@ export default function WatchScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.player}>
-          {source ? (
+          {sourceType === 'embed' && playableEmbed ? (
+            <View style={styles.playerPress}>
+              <WebView source={{ uri: playableEmbed }} style={StyleSheet.absoluteFillObject} javaScriptEnabled domStorageEnabled allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo setSupportMultipleWindows={false} />
+            </View>
+          ) : source ? (
             <Pressable style={styles.playerPress} onPress={() => { if (controls) setControls(false); else showControls(); }}>
               <Video ref={video} style={StyleSheet.absoluteFillObject} source={{ uri: source }} resizeMode={ResizeMode.CONTAIN} shouldPlay volume={volume} onPlaybackStatusUpdate={onStatus} />
               {controls ? (
@@ -258,7 +281,33 @@ export default function WatchScreen() {
           <Text style={styles.watchTitle}>{displayTitle}</Text>
           <Text style={styles.watchMeta}>Episode {episodeNum}{currentEpisode?.title ? ` · ${currentEpisode.title}` : ''}</Text>
           <View style={styles.modeRow}><Text style={styles.modeLabel}>AUDIO</Text>{(['sub', 'dub'] as const).map((value) => <Pressable key={value} onPress={() => selectAudio(value)} style={[styles.modeChip, audio === value && styles.modeChipActive]}><Text style={[styles.modeText, audio === value && styles.modeTextActive]}>{value.toUpperCase()}</Text></Pressable>)}</View>
-          {stream?.servers?.length ? <View><Text style={styles.sectionLabel}>SERVERS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>{stream.servers.map((item) => <Pressable key={`${item.name}-${item.type}`} onPress={() => selectServer(item.name)} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}</ScrollView></View> : null}
+          <View>
+            <Text style={styles.sectionLabel}>SOURCE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
+              {(['hls', 'embed'] as const).map((value) => (
+                <Pressable key={value} onPress={() => selectSourceType(value)} style={[styles.serverChip, sourceType === value && styles.serverActive]}>
+                  <Text style={[styles.serverText, sourceType === value && styles.serverTextActive]}>{value === 'hls' ? 'HLS' : 'EMBED'}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+          {sourceType === 'embed' ? (
+            <View>
+              <Text style={styles.sectionLabel}>EMBED SERVERS</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
+                <Pressable onPress={() => setServer('BabaStream')} style={[styles.serverChip, server === 'BabaStream' && styles.serverActive]}>
+                  <Text style={[styles.serverText, server === 'BabaStream' && styles.serverTextActive]}>BabaStream</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          ) : stream?.servers?.length ? (
+            <View>
+              <Text style={styles.sectionLabel}>HLS SERVERS</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.serverRow}>
+                {stream.servers.map((item) => <Pressable key={item.name + '-' + item.type} onPress={() => selectServer(item.name)} style={[styles.serverChip, server === item.name && styles.serverActive]}><Text style={[styles.serverText, server === item.name && styles.serverTextActive]}>{item.name}</Text></Pressable>)}
+              </ScrollView>
+            </View>
+          ) : null}
           <View style={styles.episodeHeader}><Text style={styles.sectionLabel}>EPISODES</Text><Text style={styles.episodeCount}>{episodes.length} EPISODES</Text></View>
           <View style={styles.episodeGrid}>{episodes.map((ep) => { const n = Number(ep.episode); const active = n === Number(episodeNum); return <Pressable key={n} onPress={() => jumpEpisode(n)} style={[styles.epButton, active && styles.epButtonActive]}><Text style={[styles.epNumber, active && styles.epNumberActive]}>{n}</Text>{ep.title ? <Text style={[styles.epTitle, active && styles.epTitleActive]} numberOfLines={1}>{ep.title}</Text> : null}</Pressable>; })}</View>
           {anime?.synopsis ? <View style={styles.about}><Text style={styles.sectionLabel}>ABOUT</Text><Text style={styles.aboutText}>{anime.synopsis}</Text></View> : null}
