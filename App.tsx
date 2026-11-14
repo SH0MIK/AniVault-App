@@ -1,67 +1,157 @@
-import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, Orbitron_600SemiBold, Orbitron_700Bold } from '@expo-google-fonts/orbitron';
-import { Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold } from '@expo-google-fonts/exo-2';
-import { AuthProvider, useAuth } from './src/auth/AuthContext';
-import LoginScreen from './src/screens/LoginScreen';
-import { initDb } from './src/db/schema';
-import { fullSync } from './src/db/sync';
-import RootNavigator from './src/navigation/RootNavigator';
-import { colors } from './src/theme';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, NativeModules, StatusBar, StyleSheet, View } from 'react-native';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
+const SITE_URL = 'https://www.anivault.co';
+const DISCORD_APPLICATION_ID = '1505538731791093820';
+const { AniVaultDiscordPresence } = NativeModules;
 
-function Root() {
-  const { user, isLoading } = useAuth();
+const PRESENCE_SCRIPT = `
+(() => {
+  if (window.__anivaultPresenceBridge) return;
+  window.__anivaultPresenceBridge = true;
+  const state = { video: null, image: '', banner: '', artLoading: false, artLoadedFor: '' };
+  const isWatchPage = () => location.pathname.replace(/\\/$/, '') === '/watch';
+  const post = (payload) => { try { window.ReactNativeWebView?.postMessage(JSON.stringify(payload)); } catch (_) {} };
+  const clear = () => post({ event: 'clear' });
 
-  // Re-sync whenever the app comes back to the foreground — catches the
-  // "closed the app on the subway with no signal, opened it back up with
-  // wifi" case without the person having to do anything.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && user) fullSync(user.id).catch(() => {});
-    });
-    return () => sub.remove();
-  }, [user?.id]);
+  const send = (event) => {
+    if (!isWatchPage()) { clear(); return; }
+    const video = state.video;
+    if (!video && event !== 'pagehide') return;
+    try {
+      const url = new URL(location.href);
+      const episode = Number(url.searchParams.get('ep')) || 0;
+      if (!episode) { clear(); return; }
+      const meta = (name) => document.querySelector('meta[property="' + name + '"], meta[name="' + name + '"]')?.getAttribute('content') || '';
+      const cssUrl = (value) => { const match = String(value || '').match(/url\\((['"]?)(.*?)\\1\\)/i); return match ? match[2] : ''; };
+      const ambient = document.querySelector('.av-ambient-img');
+      const poster = cssUrl(ambient?.style?.backgroundImage || '') || meta('og:image');
+      const title = (meta('og:title') || document.title).replace(/^Ep\\s+\\d+\\s+[—-]\\s*/i, '').replace(/\\s*\\|\\s*AniVault.*$/i, '').trim() || 'Anime';
+      const episodeTitle = document.querySelector('.wp-ep-title, [data-episode-title]')?.textContent?.trim() || '';
+      const currentTime = video && Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+      const duration = video && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      const playing = !!video && !video.paused && !video.ended && !video.seeking;
+      post({ event, title, episode, episodeTitle, url: location.href, image: state.image || poster, banner: state.banner, currentTime, duration, playing, at: Date.now() });
+    } catch (_) {}
+  };
 
-  if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
-  return user ? <RootNavigator /> : <LoginScreen />;
-}
+  const loadArt = async () => {
+    try {
+      const animeId = new URL(location.href).searchParams.get('anime') || '';
+      if (!animeId || state.artLoading || state.artLoadedFor === animeId) return;
+      state.artLoading = true;
+      const response = await fetch('/anime?id=' + encodeURIComponent(animeId), { credentials: 'same-origin', cache: 'force-cache' });
+      if (response.ok) {
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const poster = doc.querySelector('.ih-thumb img')?.getAttribute('src') || '';
+        const banner = cssUrl(doc.querySelector('.ih-bg')?.getAttribute('style') || '');
+        if (!state.image && poster) state.image = new URL(poster, location.href).href;
+        if (banner) state.banner = new URL(banner, location.href).href;
+      }
+      state.artLoadedFor = animeId;
+    } catch (_) {
+    } finally { state.artLoading = false; }
+    send('art-ready');
+  };
+
+  const attach = () => {
+    if (!isWatchPage()) { state.video = null; clear(); return; }
+    const next = document.getElementById('sp-video') || document.querySelector('video');
+    if (!(next instanceof HTMLVideoElement) || next === state.video) { loadArt(); return; }
+    state.video = next;
+    ['play','playing','pause','waiting','stalled','seeked','loadedmetadata','durationchange','ended'].forEach((name) => next.addEventListener(name, () => send(name), { passive: true }));
+    send('ready');
+    loadArt();
+  };
+
+  window.__anivaultPresenceSend = send;
+  const originalPushState = history.pushState;
+  history.pushState = function () { const result = originalPushState.apply(this, arguments); setTimeout(attach, 0); return result; };
+  window.addEventListener('popstate', attach);
+  window.addEventListener('pagehide', () => post({ event: 'pagehide' }), { capture: true });
+  attach();
+  new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
+})();
+true;
+`;
 
 export default function App() {
-  const dbReady = useRef(false);
-  if (!dbReady.current) {
-    initDb();
-    dbReady.current = true;
-  }
+  const webViewRef = useRef<WebView>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [canGoBack, setCanGoBack] = useState(false);
 
-  // Site uses Orbitron for headings and Exo 2 for body text — loaded here
-  // once and referenced by family name everywhere via src/theme.ts.
-  const [fontsLoaded] = useFonts({
-    Orbitron_600SemiBold, Orbitron_700Bold,
-    Exo2_400Regular, Exo2_500Medium, Exo2_600SemiBold, Exo2_700Bold,
-  });
+  const clearHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+  }, []);
+
+  const handleMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const payload = JSON.parse(event.nativeEvent.data);
+      if (payload.event === 'clear' || payload.event === 'pagehide' || payload.event === 'ended') {
+        AniVaultDiscordPresence?.clear?.();
+        clearHeartbeat();
+        return;
+      }
+      if (!payload.episode) return;
+      AniVaultDiscordPresence?.start?.(DISCORD_APPLICATION_ID);
+      AniVaultDiscordPresence?.update?.(JSON.stringify(payload));
+      if (!heartbeatRef.current) {
+        heartbeatRef.current = setInterval(() => {
+          webViewRef.current?.injectJavaScript('window.__anivaultPresenceSend?.("heartbeat"); true;');
+        }, 10000);
+      }
+    } catch (_) {}
+  }, [clearHeartbeat]);
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (canGoBack && webViewRef.current) { webViewRef.current.goBack(); return true; }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [canGoBack]);
 
-  if (!fontsLoaded) return null;
+  useEffect(() => () => {
+    clearHeartbeat();
+    try { AniVaultDiscordPresence?.clear?.(); AniVaultDiscordPresence?.close?.(); } catch (_) {}
+  }, [clearHeartbeat]);
 
   return (
-    <AuthProvider>
-      <Root />
-    </AuthProvider>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#08090c" />
+      {loading && <View style={styles.loading}><ActivityIndicator size="large" color="#E8453C" /></View>}
+      <WebView
+        ref={webViewRef}
+        source={{ uri: SITE_URL }}
+        style={styles.webview}
+        originWhitelist={['https://*', 'http://*']}
+        javaScriptEnabled
+        domStorageEnabled
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo
+        setSupportMultipleWindows={false}
+        onLoadStart={() => setLoading(true)}
+        onLoadEnd={() => setLoading(false)}
+        onError={() => setLoading(false)}
+        onNavigationStateChange={(navigation) => setCanGoBack(navigation.canGoBack)}
+        onMessage={handleMessage}
+        injectedJavaScript={PRESENCE_SCRIPT}
+        injectedJavaScriptBeforeContentLoaded={PRESENCE_SCRIPT}
+        pullToRefreshEnabled
+        allowsBackForwardNavigationGestures
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: '#08090c' },
+  webview: { flex: 1, backgroundColor: '#08090c' },
+  loading: { ...StyleSheet.absoluteFillObject, zIndex: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: '#08090c' },
 });
