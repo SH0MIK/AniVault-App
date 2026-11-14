@@ -50,7 +50,7 @@ module.exports = function withDiscordPresence(config) {
       let injected = false;
       for (const re of patterns) {
         if (re.test(text)) {
-          text = text.replace(re, match => `${match}\\n            add(DiscordPresencePackage())`);
+          text = text.replace(re, match => `${match}\n            add(DiscordPresencePackage())`);
           injected = true;
           break;
         }
