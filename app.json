@@ -6,33 +6,18 @@
     "orientation": "portrait",
     "scheme": "anivault",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0a0b0e",
+    "backgroundColor": "#08090c",
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "backgroundColor": "#0a0b0e",
-      "resizeMode": "contain"
-    },
+    "splash": { "image": "./assets/splash.png", "backgroundColor": "#08090c", "resizeMode": "contain" },
     "assetBundlePatterns": ["**/*"],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "co.anivault.app"
-    },
+    "ios": { "supportsTablet": true, "bundleIdentifier": "co.anivault.app" },
     "android": {
       "package": "co.anivault.app",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0a0b0e"
-      }
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#08090c" }
     },
     "plugins": [
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/adaptive-icon.png",
-          "color": "#7c3aed"
-        }
-      ]
+      ["expo-notifications", { "icon": "./assets/adaptive-icon.png", "color": "#E8453C" }],
+      "./plugins/withDiscordPresence"
     ]
   }
 }
