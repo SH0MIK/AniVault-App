@@ -44,13 +44,13 @@ module.exports = function withDiscordPresence(config) {
         match => `${match}\nimport co.anivault.presence.DiscordPresencePackage\n`
       );
       const patterns = [
-        /(PackageList\(this\)\.packages\.apply\s*\{/),
-        /(PackageList\(this\)\.packages\s*\.toMutableList\(\)\s*\.apply\s*\{/),
+        /PackageList\\(this\\)\\.packages\\.apply\\s*\\{/,
+        /PackageList\\(this\\)\\.packages\\s*\\.toMutableList\\(\\)\\s*\\.apply\\s*\\{/,
       ];
       let injected = false;
       for (const re of patterns) {
         if (re.test(text)) {
-          text = text.replace(re, '$1\n            add(DiscordPresencePackage())');
+          text = text.replace(re, match => `${match}\\n            add(DiscordPresencePackage())`);
           injected = true;
           break;
         }
