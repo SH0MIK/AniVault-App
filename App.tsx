@@ -10,15 +10,17 @@ const PRESENCE_SCRIPT = `
 (() => {
   if (window.__anivaultPresenceBridge) return;
   window.__anivaultPresenceBridge = true;
-  const state = { video: null, image: '', banner: '', artLoading: false, artLoadedFor: '' };
+  const state = { video: null, image: '', banner: '', artLoading: false, artLoadedFor: '', active: false, lastUrl: '' };
   const isWatchPage = () => location.pathname.replace(/\\/$/, '') === '/watch';
   const post = (payload) => { try { window.ReactNativeWebView?.postMessage(JSON.stringify(payload)); } catch (_) {} };
-  const clear = () => post({ event: 'clear' });
+  const clear = () => { if (!state.active) return; state.active = false; post({ event: 'clear' }); };
 
   const send = (event) => {
     if (!isWatchPage()) { clear(); return; }
     const video = state.video;
     if (!video && event !== 'pagehide') return;
+    state.active = true;
+    state.lastUrl = location.href;
     try {
       const url = new URL(location.href);
       const episode = Number(url.searchParams.get('ep')) || 0;
@@ -59,7 +61,12 @@ const PRESENCE_SCRIPT = `
   const attach = () => {
     if (!isWatchPage()) { state.video = null; clear(); return; }
     const next = document.getElementById('sp-video') || document.querySelector('video');
-    if (!(next instanceof HTMLVideoElement) || next === state.video) { loadArt(); return; }
+    if (!(next instanceof HTMLVideoElement)) { loadArt(); return; }
+    if (next === state.video) {
+      if (state.lastUrl !== location.href) send('route-change');
+      loadArt();
+      return;
+    }
     state.video = next;
     ['play','playing','pause','waiting','stalled','seeked','loadedmetadata','durationchange','ended'].forEach((name) => next.addEventListener(name, () => send(name), { passive: true }));
     send('ready');
