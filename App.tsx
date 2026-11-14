@@ -149,7 +149,6 @@ export default function App() {
         onNavigationStateChange={(navigation) => setCanGoBack(navigation.canGoBack)}
         onMessage={handleMessage}
         injectedJavaScript={PRESENCE_SCRIPT}
-        injectedJavaScriptBeforeContentLoaded={PRESENCE_SCRIPT}
         pullToRefreshEnabled
         allowsBackForwardNavigationGestures
       />
