@@ -58,10 +58,10 @@ class MainActivity : Activity() {
             addJavascriptInterface(PresenceBridge(), "AniVaultNative")
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    progress.visibility = View.VISIBLE
+                    this@MainActivity.progress.setVisibility(View.VISIBLE)
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    progress.visibility = View.GONE
+                    this@MainActivity.progress.setVisibility(View.GONE)
                     swipeRefresh.isRefreshing = false
                     view?.evaluateJavascript(PRESENCE_SCRIPT, null)
                 }
