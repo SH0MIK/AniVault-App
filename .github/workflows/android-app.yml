@@ -11,6 +11,10 @@ on:
       - '.github/workflows/android-app.yml'
       - 'modules/anivault-discord-presence/android/discord_partner_sdk.aar'
 
+concurrency:
+  group: anivault-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
