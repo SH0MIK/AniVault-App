@@ -152,7 +152,7 @@ class MainActivity : Activity() {
         (() => {
           if (window.__anivaultPresenceBridge) return;
           window.__anivaultPresenceBridge = true;
-          const state = { video: null, image: '', banner: '', artLoading: false, artLoadedFor: '', active: false, lastUrl: '' };
+          const state = { video: null, image: '', episodeImage: '', banner: '', artLoading: false, artLoadedFor: '', active: false, lastUrl: '' };
           const isWatchPage = () => location.pathname.replace(/\/$/, '') === '/watch';
           const post = (payload) => { try { window.AniVaultNative?.postMessage(JSON.stringify(payload)); } catch (_) {} };
           const clear = () => { if (!state.active) return; state.active = false; post({ event: 'clear' }); };
@@ -170,12 +170,14 @@ class MainActivity : Activity() {
               const meta = (name) => document.querySelector('meta[property="' + name + '"], meta[name="' + name + '"]')?.getAttribute('content') || '';
               const ambient = document.querySelector('.av-ambient-img');
               const poster = cssUrl(ambient?.style?.backgroundImage || '') || meta('og:image');
+              const episodeImage = meta('og:image');
+              if (episodeImage) state.episodeImage = new URL(episodeImage, location.href).href;
               const title = (meta('og:title') || document.title).replace(/^Ep\s+\d+\s+[—-]\s*/i, '').replace(/\s*\|\s*AniVault.*$/i, '').trim() || 'Anime';
               const episodeTitle = document.querySelector('.wp-ep-title, [data-episode-title]')?.textContent?.trim() || '';
               const currentTime = video && Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
               const duration = video && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
               const playing = !!video && !video.paused && !video.ended && !video.seeking;
-              post({ event, title, episode, episodeTitle, url: location.href, image: state.image || poster, banner: state.banner, currentTime, duration, playing, at: Date.now() });
+              post({ event, title, episode, episodeTitle, url: location.href, image: state.episodeImage || state.image || poster, banner: state.banner, currentTime, duration, playing, at: Date.now() });
             } catch (_) {}
           };
           const loadArt = async () => {
