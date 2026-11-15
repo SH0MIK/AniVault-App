@@ -68,7 +68,7 @@ class MainActivity : Activity() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
             }
             webChromeClient = object : WebChromeClient() {
-                override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                override fun onShowCustomView(view: View, callback: CustomViewCallback?) {
                     if (customView != null) { callback?.onCustomViewHidden(); return }
                     customView = view
                     customViewCallback = callback
