@@ -1,20 +1,17 @@
-# AniVault Android build + Discord Rich Presence
+# AniVault Android — Discord Rich Presence
 
-This app is the separate React Native/Expo AniVault app. Discord Rich Presence is integrated into the native Android build; it is not the website bridge.
+The app is a lightweight native Android WebView wrapper for `https://www.anivault.co`. It does not ship the old React Native/Expo screens or runtime. Discord Rich Presence is implemented natively using the Discord Partner SDK.
 
-## Local build
+## Build
+
+Requires JDK 17, Android SDK/NDK, CMake 3.22.1 and Gradle 8.7.
 
 ```bash
-npm ci
-npx expo prebuild --platform android --no-install
-cd android
-./gradlew assembleRelease -PdiscordApplicationId=1505538731791093820
+gradle --no-daemon :app:assembleRelease
 ```
 
-The APK is produced at `android/app/build/outputs/apk/release/app-release.apk`.
+The APK is generated at `app/build/outputs/apk/release/app-release.apk`. GitHub Actions builds and uploads it automatically on relevant Android source changes.
 
-## GitHub Actions
+## Discord presence
 
-The workflow at `.github/workflows/android-app.yml` installs Node/Java, runs Expo prebuild, compiles the native Android project and uploads the APK as a workflow artifact.
-
-The Discord application ID is supplied through `DISCORD_APPLICATION_ID` (repository variable/secret) and falls back to the AniVault development application ID when unset.
+The native bridge reads the current `/watch` page, including anime title, episode, poster/banner, playback state and progress. It updates Discord Rich Presence and clears it when playback ends or the user leaves the watch page.
