@@ -12,19 +12,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ProgressBar
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
+import android.app.Activity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.discord.socialsdk.DiscordSocialSdkInit
 import co.anivault.presence.DiscordPresence
 import org.json.JSONObject
 
-class MainActivity : AppCompatActivity() {
-    companion object {
-        private const val SITE_URL = "https://www.anivault.co"
-        private const val DISCORD_APPLICATION_ID = "1505538731791093820"
-    }
-
+class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var progress: ProgressBar
@@ -60,7 +54,6 @@ class MainActivity : AppCompatActivity() {
             settings.setSupportMultipleWindows(false)
             settings.loadsImagesAutomatically = true
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.userAgentString = settings.userAgentString
             CookieManagerCompat.enable(this)
             addJavascriptInterface(PresenceBridge(), "AniVaultNative")
             webViewClient = object : WebViewClient() {
@@ -100,13 +93,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(swipeRefresh)
 
         if (savedInstanceState == null) webView.loadUrl(SITE_URL) else webView.restoreState(savedInstanceState)
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (customView != null) hideCustomView()
-                else if (webView.canGoBack()) webView.goBack()
-                else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
-            }
-        })
+
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (customView != null) hideCustomView()
+        else if (webView.canGoBack()) webView.goBack()
+        else super.onBackPressed()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -148,7 +142,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private companion object PresenceScript {
+    companion object {
+        private const val SITE_URL = "https://www.anivault.co"
+        private const val DISCORD_APPLICATION_ID = "1505538731791093820"
         val PRESENCE_SCRIPT = """
         (() => {
           if (window.__anivaultPresenceBridge) return;
