@@ -13,6 +13,7 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.discord.socialsdk.DiscordSocialSdkInit
 import co.anivault.presence.DiscordPresence
@@ -72,6 +73,7 @@ class MainActivity : Activity() {
                     if (customView != null) { callback?.onCustomViewHidden(); return }
                     customView = view
                     customViewCallback = callback
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     (view?.parent as? ViewGroup)?.removeView(view)
                     addContentView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                     swipeRefresh.visibility = View.GONE
@@ -110,6 +112,7 @@ class MainActivity : Activity() {
         customView = null
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         swipeRefresh.visibility = View.VISIBLE
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
     }
