@@ -213,6 +213,7 @@ class MainActivity : Activity() {
           window.addEventListener('popstate', attach);
           window.addEventListener('pagehide', () => post({ event: 'pagehide' }), { capture: true });
           attach();
+          setInterval(() => { if (state.active) send('heartbeat'); }, 10000);
           new MutationObserver(attach).observe(document.documentElement, { childList: true, subtree: true });
         })();
         """.trimIndent()
